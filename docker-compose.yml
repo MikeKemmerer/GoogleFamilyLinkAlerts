@@ -15,7 +15,12 @@ services:
   # a noVNC web view so you can complete Google login/2FA yourself, then
   # exposes the resulting session cookies to our app over /api/cookies.
   familylink-auth:
-    image: ghcr.io/noiwid/familylink-auth:${FAMILYLINK_AUTH_TAG:-1.7.1-standalone}
+    # Pinned to a specific version (not the floating "standalone" tag) for
+    # reproducibility -- Dependabot's docker ecosystem watches this line and
+    # proposes a PR when noiwid/HAFamilyLink cuts a new release. Review its
+    # changelog before merging, since it handles the sensitive login/cookie
+    # flow: https://github.com/noiwid/HAFamilyLink/blob/main/familylink-playwright/CHANGELOG.md
+    image: ghcr.io/noiwid/familylink-auth:1.7.1-standalone
     container_name: familylink-auth
     ports:
       - "8099:8099"   # Web UI (used to start the auth flow)

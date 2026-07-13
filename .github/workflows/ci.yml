@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt -r requirements-dev.txt
+      - run: pytest -q
+
+  # Only builds/publishes on pushes to main (moving "edge" tag) and version
+  # tags (immutable semver tags) -- never for pull requests from forks, which
+  # don't get registry credentials.
+  build-and-push:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/mikekemmerer/googlefamilylinkalerts
+          tags: |
+            # v1.2.3 -> 1.2.3, 1.2, 1 (+ "latest" on the highest semver tag)
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Moving tag tracking the latest commit on main, for those who
+            # want to stay on the bleeding edge instead of pinning a release.
+            type=raw,value=edge,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
