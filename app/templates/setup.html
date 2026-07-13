@@ -10,9 +10,11 @@
       <p class="muted">Waiting for the <code>familylink-auth</code> container to become reachable at
         <code>{{ auth_base_url }}</code>. Check that it's running, then refresh.</p>
     {% else %}
-      <p>Open the login browser below and sign in with your (secondary/parent) Google account.
-         Once you've completed login there, come back and click "I've logged in".</p>
-      <p><a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">Open login screen (noVNC)</a></p>
+      <p>First, click below to start the login browser on the <code>familylink-auth</code> service,
+         then open noVNC to sign in with your (secondary/parent) Google account. Once you've
+         completed login there, come back and click "I've logged in".</p>
+      <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a></p>
+      <p><a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a></p>
       {% if auth_error %}<p class="flash">{{ auth_error }}</p>{% endif %}
     {% endif %}
     <p><a class="btn" href="/setup">I've logged in / Refresh</a></p>

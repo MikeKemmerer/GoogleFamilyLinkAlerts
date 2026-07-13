@@ -15,7 +15,8 @@
     {% if has_cookies %}<span class="badge badge-ok">logged in</span>{% else %}<span class="badge badge-bad">not logged in</span>{% endif %}
   </p>
   {% if not has_cookies %}
-    <p><a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">Open login screen (noVNC)</a></p>
+    <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
+       &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a></p>
   {% endif %}
 </div>
 

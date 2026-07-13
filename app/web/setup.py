@@ -36,6 +36,7 @@ async def setup_get(request: Request, session: Session = Depends(get_db)):
             "healthy": healthy,
             "auth_error": auth_error,
             "auth_base_url": settings.familylink_auth_base_url,
+            "auth_ui_url": settings.familylink_auth_ui_url_with_key,
             "novnc_url": settings.familylink_auth_novnc_url,
             "setup_completed": False,
         })

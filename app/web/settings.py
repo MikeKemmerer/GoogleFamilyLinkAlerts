@@ -27,6 +27,7 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "saved": saved,
         "auth_healthy": healthy,
         "has_cookies": bool(cookies),
+        "auth_ui_url": settings.familylink_auth_ui_url_with_key,
         "novnc_url": settings.familylink_auth_novnc_url,
         "children": children,
         "ntfy_server": ntfy_config[0] if ntfy_config else "",

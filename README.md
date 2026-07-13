@@ -55,10 +55,13 @@ Then open `http://<this-host>:8080` and follow the first-run setup wizard
 ### First-run setup wizard walkthrough
 
 1. **Sign in to Google.** The wizard checks whether `familylink-auth` already
-   has a valid session. If not, it links you to the noVNC login screen at
-   `http://<this-host>:6080` — connect (password = your `VNC_PASSWORD`), sign
-   in with your secondary/parent Google account, complete 2FA if prompted,
-   then come back and click "I've logged in / Refresh".
+   has a valid session. If not, it shows two links: click **"1. Start
+   Authentication"** first (launches the login browser inside
+   `familylink-auth` — the wizard appends `FAMILYLINK_AUTH_API_KEY`
+   automatically if you set one), then **"2. Open login screen (noVNC)"**
+   (password = your `VNC_PASSWORD`) to sign in with your secondary/parent
+   Google account and complete 2FA if prompted. Come back and click "I've
+   logged in / Refresh".
 2. **Choose children to monitor.** Once authenticated, the wizard
    auto-discovers every supervised child on that Google family and lets you
    toggle which ones to monitor. No manual entry needed for the common case.
@@ -127,8 +130,9 @@ reversed, so prefer rolling back promptly if you hit a bad release.
 
 | Variable | Default | Description |
 |---|---|---|
-| `FAMILYLINK_AUTH_API_KEY` | — | Shared secret protecting `familylink-auth`'s `/api/cookies` endpoint. Required in practice — that endpoint returns your full Google session. |
+| `FAMILYLINK_AUTH_API_KEY` | — | Shared secret protecting `familylink-auth`'s entire web UI/API, not just `/api/cookies`. Required in practice — that endpoint returns your full Google session. Our app's setup wizard appends it automatically to its "Start Authentication" link. |
 | `FAMILYLINK_AUTH_BASE_URL` | `http://familylink-auth:8099` | Container-to-container URL our app uses; leave as-is with the provided compose file. |
+| `FAMILYLINK_AUTH_UI_URL` | `http://localhost:8099` | Browser-facing URL for familylink-auth's own web UI (where "Start Authentication" lives), shown as a link in the setup wizard/status page. Set to your Docker host's IP/hostname if accessing remotely. |
 | `FAMILYLINK_AUTH_NOVNC_URL` | `http://localhost:6080` | Browser-facing noVNC URL, shown as a login link in the web UI. Set to your Docker host's IP/hostname if accessing remotely. |
 | `VNC_PASSWORD` | — | Password for the noVNC session used to complete Google login. |
 | `APP_IMAGE_TAG` | `latest` | Our app's image tag — pin to a specific `vX.Y.Z` release for reproducibility. |

@@ -19,11 +19,26 @@ class Settings(BaseSettings):
     # familylink-auth container
     familylink_auth_base_url: str = "http://familylink-auth:8099"
     familylink_auth_api_key: str | None = None
-    # Browser-facing URL for the familylink-auth noVNC login page (shown as a
-    # link in the setup wizard / status page -- must be reachable from the
-    # *user's browser*, not just container-to-container, so it defaults to
-    # localhost + the published port rather than the docker-compose service name.
+    # Browser-facing URLs for familylink-auth's own web UI (where the
+    # "Start Authentication" button lives) and its noVNC login screen -- both
+    # must be reachable from the *user's browser*, not just
+    # container-to-container, so they default to localhost + the published
+    # port rather than the docker-compose service name.
+    familylink_auth_ui_url: str = "http://localhost:8099"
     familylink_auth_novnc_url: str = "http://localhost:6080"
+
+    @property
+    def familylink_auth_ui_url_with_key(self) -> str:
+        """familylink_auth_ui_url with ?api_key=... appended, if configured.
+
+        familylink-auth's own web UI enforces the API key on every request
+        (not just /api/cookies) when API_KEY is set, so a bare link to it
+        would 403 on "Start Authentication".
+        """
+        if not self.familylink_auth_api_key:
+            return self.familylink_auth_ui_url
+        sep = "&" if "?" in self.familylink_auth_ui_url else "?"
+        return f"{self.familylink_auth_ui_url}{sep}api_key={self.familylink_auth_api_key}"
 
     # Our app
     app_data_dir: Path = Path("/data")

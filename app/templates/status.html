@@ -14,7 +14,8 @@
   </p>
   <p class="muted">Monitoring {{ children_count }} child(ren), polling every ~{{ poll_interval_minutes }} minutes.</p>
   {% if not has_cookies %}
-    <p><a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">Open login screen (noVNC)</a> to re-authenticate.</p>
+    <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
+       &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a> to re-authenticate.</p>
   {% endif %}
 </div>
 

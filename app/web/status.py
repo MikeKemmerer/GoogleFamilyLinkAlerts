@@ -27,6 +27,7 @@ async def root(request: Request, session: Session = Depends(get_db)):
         "setup_completed": True,
         "auth_healthy": healthy,
         "has_cookies": bool(cookies),
+        "auth_ui_url": settings.familylink_auth_ui_url_with_key,
         "novnc_url": settings.familylink_auth_novnc_url,
         "children_count": children_count,
         "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
