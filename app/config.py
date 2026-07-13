@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # familylink-auth container
     familylink_auth_base_url: str = "http://familylink-auth:8099"
     familylink_auth_api_key: str | None = None
+    # Browser-facing URL for the familylink-auth noVNC login page (shown as a
+    # link in the setup wizard / status page -- must be reachable from the
+    # *user's browser*, not just container-to-container, so it defaults to
+    # localhost + the published port rather than the docker-compose service name.
+    familylink_auth_novnc_url: str = "http://localhost:6080"
 
     # Our app
     app_data_dir: Path = Path("/data")

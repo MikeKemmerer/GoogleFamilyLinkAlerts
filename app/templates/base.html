@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Family Link Alerts{% endblock %}</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; max-width: 780px;
+           margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; }
+    h1 { font-size: 1.4rem; }
+    nav { margin-bottom: 1.5rem; }
+    nav a { margin-right: 1rem; text-decoration: none; color: #2c5aa0; }
+    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+    .badge-ok { background: #d4edda; color: #155724; }
+    .badge-bad { background: #f8d7da; color: #721c24; }
+    label { display: block; margin-top: 0.75rem; font-weight: 600; }
+    input[type=text], input[type=number], input[type=url] {
+      width: 100%; padding: 0.4rem; margin-top: 0.25rem; box-sizing: border-box;
+    }
+    button, .btn { margin-top: 1rem; padding: 0.5rem 1rem; border: none; border-radius: 6px;
+           background: #2c5aa0; color: #fff; cursor: pointer; font-size: 1rem; text-decoration: none;
+           display: inline-block; }
+    button:hover, .btn:hover { background: #1e3f73; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    .muted { color: #777; font-size: 0.9rem; }
+    .flash { background: #fff3cd; border: 1px solid #ffe69c; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  {% if setup_completed %}
+  <nav>
+    <a href="/">Status</a>
+    <a href="/history">History</a>
+    <a href="/settings">Settings</a>
+  </nav>
+  {% endif %}
+  {% block content %}{% endblock %}
+</body>
+</html>

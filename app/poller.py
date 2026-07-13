@@ -178,3 +178,12 @@ def start_scheduler() -> AsyncIOScheduler:
     scheduler.start()
     _LOGGER.info("Poller scheduled every ~%d minutes", interval_minutes)
     return scheduler
+
+
+def reschedule(scheduler: AsyncIOScheduler, interval_minutes: int) -> None:
+    """Update the poll job's interval, e.g. after the user changes it in Settings."""
+    scheduler.reschedule_job(
+        "familylink_poll",
+        trigger=IntervalTrigger(seconds=_jittered_interval_seconds(interval_minutes)),
+    )
+    _LOGGER.info("Poller rescheduled to every ~%d minutes", interval_minutes)

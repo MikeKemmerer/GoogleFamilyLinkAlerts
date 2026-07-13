@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}History — Family Link Alerts{% endblock %}
+{% block content %}
+<h1>Change history</h1>
+
+{% if failures %}
+<div class="card">
+  <h2>Recent polling issues</h2>
+  <table>
+    <thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead>
+    <tbody>
+    {% for f in failures %}
+      <tr><td>{{ f.occurred_at }}</td><td>{{ f.kind }}</td><td>{{ f.message }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Detected changes</h2>
+  {% if not events %}
+    <p class="muted">No changes detected yet.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>When</th><th>Child</th><th>Field</th><th>Old</th><th>New</th></tr></thead>
+    <tbody>
+    {% for e in events %}
+      <tr>
+        <td>{{ e.detected_at }}</td>
+        <td>{{ child_names.get(e.child_id, e.child_id) }}</td>
+        <td>{{ e.field_path }}</td>
+        <td>{{ e.old_value }}</td>
+        <td>{{ e.new_value }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Setup — Family Link Alerts{% endblock %}
+{% block content %}
+<h1>Family Link Alerts — First-run setup</h1>
+
+{% if stage == "auth" %}
+  <div class="card">
+    <h2>Step 1 of 3: Sign in to Google Family Link</h2>
+    {% if not healthy %}
+      <p class="muted">Waiting for the <code>familylink-auth</code> container to become reachable at
+        <code>{{ auth_base_url }}</code>. Check that it's running, then refresh.</p>
+    {% else %}
+      <p>Open the login browser below and sign in with your (secondary/parent) Google account.
+         Once you've completed login there, come back and click "I've logged in".</p>
+      <p><a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">Open login screen (noVNC)</a></p>
+      {% if auth_error %}<p class="flash">{{ auth_error }}</p>{% endif %}
+    {% endif %}
+    <p><a class="btn" href="/setup">I've logged in / Refresh</a></p>
+  </div>
+
+{% elif stage == "discover_error" %}
+  <div class="card">
+    <h2>Step 2 of 3: Discover children</h2>
+    <p class="flash">Could not discover supervised children: {{ error }}</p>
+    <p class="muted">Make sure the signed-in Google account is a parent/guardian on a Family Link family
+       with at least one supervised child, then try again.</p>
+    <p><a class="btn" href="/setup">Try again</a></p>
+  </div>
+
+{% elif stage == "children" %}
+  <div class="card">
+    <h2>Step 2 of 3: Choose children to monitor</h2>
+    <form method="post" action="/setup/children">
+      <table>
+        <thead><tr><th>Monitor?</th><th>Name</th></tr></thead>
+        <tbody>
+        {% for c in discovered %}
+          <tr>
+            <td><input type="checkbox" name="enabled_{{ c.id }}" checked></td>
+            <td>{{ c.name }}
+              <input type="hidden" name="child_ids" value="{{ c.id }}">
+              <input type="hidden" name="child_names" value="{{ c.name }}">
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit">Continue</button>
+    </form>
+  </div>
+
+{% elif stage == "notify" %}
+  <div class="card">
+    <h2>Step 3 of 3: Alerts &amp; polling</h2>
+    <form method="post" action="/setup/notify">
+      <label for="ntfy_server">ntfy server URL</label>
+      <input type="url" id="ntfy_server" name="ntfy_server" value="https://ntfy.sh" required>
+      <label for="ntfy_topic">ntfy topic</label>
+      <input type="text" id="ntfy_topic" name="ntfy_topic" placeholder="e.g. familylink-alerts-a1b2c3" required>
+      <label for="poll_interval_minutes">Poll interval (minutes)</label>
+      <input type="number" id="poll_interval_minutes" name="poll_interval_minutes" min="5" value="20" required>
+      <p class="muted">Pick a topic name that's hard to guess -- anyone who knows it can read your alerts
+         on a public ntfy.sh server. Use a self-hosted ntfy server for more privacy.</p>
+      <button type="submit">Finish setup</button>
+    </form>
+  </div>
+{% endif %}
+{% endblock %}

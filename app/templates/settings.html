@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Settings — Family Link Alerts{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+{% if saved %}<div class="flash">Settings saved.</div>{% endif %}
+
+<div class="card">
+  <h2>Google account status</h2>
+  <p>
+    familylink-auth:
+    {% if auth_healthy %}<span class="badge badge-ok">reachable</span>{% else %}<span class="badge badge-bad">unreachable</span>{% endif %}
+    &nbsp;·&nbsp;
+    Session:
+    {% if has_cookies %}<span class="badge badge-ok">logged in</span>{% else %}<span class="badge badge-bad">not logged in</span>{% endif %}
+  </p>
+  {% if not has_cookies %}
+    <p><a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">Open login screen (noVNC)</a></p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Children</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Monitoring</th><th></th></tr></thead>
+    <tbody>
+    {% for c in children %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
+        <td>
+          <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
+            <button type="submit">{{ "Disable" if c.enabled else "Enable" }}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>Alerts &amp; polling</h2>
+  <form method="post" action="/settings">
+    <label for="ntfy_server">ntfy server URL</label>
+    <input type="url" id="ntfy_server" name="ntfy_server" value="{{ ntfy_server }}" required>
+    <label for="ntfy_topic">ntfy topic</label>
+    <input type="text" id="ntfy_topic" name="ntfy_topic" value="{{ ntfy_topic }}" required>
+    <label for="poll_interval_minutes">Poll interval (minutes)</label>
+    <input type="number" id="poll_interval_minutes" name="poll_interval_minutes" min="5" value="{{ poll_interval_minutes }}" required>
+    <button type="submit">Save</button>
+  </form>
+</div>
+{% endblock %}

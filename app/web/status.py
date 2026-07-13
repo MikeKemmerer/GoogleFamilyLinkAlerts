@@ -1,0 +1,33 @@
+"""Root status/dashboard page."""
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse
+from sqlmodel import Session, select
+
+from ..config import settings
+from ..db import settings_store
+from ..db.models import Child
+from .deps import build_auth_client, get_db, templates
+
+router = APIRouter()
+
+
+@router.get("/")
+async def root(request: Request, session: Session = Depends(get_db)):
+    if not settings_store.is_setup_completed(session):
+        return RedirectResponse("/setup", status_code=303)
+
+    auth_client = build_auth_client()
+    healthy = await auth_client.health_ok()
+    cookies = await auth_client.get_cookies() if healthy else None
+    children_count = len(session.exec(select(Child).where(Child.enabled == True)).all())  # noqa: E712
+
+    return templates.TemplateResponse(request, "status.html", {
+        "setup_completed": True,
+        "auth_healthy": healthy,
+        "has_cookies": bool(cookies),
+        "novnc_url": settings.familylink_auth_novnc_url,
+        "children_count": children_count,
+        "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
+    })
