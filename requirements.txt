@@ -5,5 +5,5 @@ python-multipart==0.0.20
 sqlmodel==0.0.22
 alembic==1.14.0
 httpx==0.28.1
-apscheduler==3.11.0
+apscheduler==3.11.3
 pydantic-settings==2.7.1
