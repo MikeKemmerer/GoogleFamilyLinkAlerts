@@ -1,0 +1,22 @@
+# Advanced / override configuration (optional).
+#
+# Under normal use you do NOT need to edit this file: children, the ntfy
+# target, and the poll interval are all configured through the web UI's
+# first-run setup wizard and persisted in the SQLite database.
+#
+# This file exists only for advanced overrides that aren't (yet) exposed in
+# the UI. Copy to config/config.yaml if you need it -- config/config.yaml is
+# gitignored and optional.
+
+# Uncomment to override the default poll interval (minutes) before the
+# wizard has been run for the first time.
+# default_poll_interval_minutes: 20
+
+# Uncomment to disable a specific data source without editing code.
+# enabled_sources:
+#   screen_time: true
+#   app_limits: true
+#   bedtime: true
+#   school_time: true
+#   location: false
+#   website_filter: false  # not yet implemented, see plan/notes
