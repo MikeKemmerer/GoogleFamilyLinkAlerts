@@ -3,7 +3,7 @@
 # This is a plain Python/FastAPI app (no browser automation needed -- that
 # lives entirely in the separate, unmodified upstream `familylink-auth`
 # container; see docker-compose.yml and third_party/NOTICE.md).
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
