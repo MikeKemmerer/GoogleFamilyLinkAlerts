@@ -6,12 +6,23 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    groups:
+      # Batch routine minor/patch bumps into one PR instead of one-per-package.
+      # Major version bumps (e.g. a pytest 8->9) are deliberately left
+      # ungrouped so they still get their own PR and individual review.
+      python-dependencies:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # GitHub Actions workflows
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Docker images: our own Dockerfile base image, AND the pinned
   # familylink-auth tag referenced in docker-compose.yml. Dependabot's
@@ -23,3 +34,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Major/minor Python base-image bumps (e.g. 3.12 -> 3.14) need a
+      # deliberate, manually-reviewed upgrade (wheel/ABI availability, etc.)
+      # rather than an automatic PR. Patch bumps within 3.12.x still flow
+      # through normally.
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

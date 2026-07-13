@@ -21,6 +21,24 @@ jobs:
       - run: pip install -r requirements.txt -r requirements-dev.txt
       - run: pytest -q
 
+  # Validates the Dockerfile still builds on every PR (e.g. Dependabot base
+  # image bumps) without needing registry credentials or pushing anything.
+  # Single-platform + no push keeps this fast; the real multi-arch build
+  # happens in build-and-push below.
+  docker-build-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Only builds/publishes on pushes to main (moving "edge" tag) and version
   # tags (immutable semver tags) -- never for pull requests from forks, which
   # don't get registry credentials.
