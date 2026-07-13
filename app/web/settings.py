@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import settings_store
-from ..db.models import Child
+from ..db.models import Child, LatestSnapshot
 from .deps import build_auth_client, get_db, templates
 
 router = APIRouter()
@@ -60,5 +60,21 @@ async def toggle_child(child_id: str, session: Session = Depends(get_db)):
     if child:
         child.enabled = not child.enabled
         session.add(child)
+        session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/children/{child_id}/reset-baseline")
+async def reset_baseline(child_id: str, session: Session = Depends(get_db)):
+    """Delete the stored snapshot for a child so the next poll re-establishes
+    a silent baseline instead of diffing against stale data.
+
+    Useful after making a bunch of manual changes at once (e.g. a big
+    cleanup pass in Family Link) that would otherwise show up as a wall of
+    unrelated change notifications on the next poll.
+    """
+    snapshot = session.get(LatestSnapshot, child_id)
+    if snapshot:
+        session.delete(snapshot)
         session.commit()
     return RedirectResponse("/settings", status_code=303)

@@ -1,4 +1,4 @@
-from app.diff.engine import diff_snapshots, flatten
+from app.diff.engine import diff_snapshots, flatten, is_ignored_path
 
 
 def test_flatten_nested_dict():
@@ -53,3 +53,46 @@ def test_diff_detects_added_and_removed_fields():
 def test_diff_no_changes_when_identical():
     data = {"a": 1, "b": {"c": 2}}
     assert diff_snapshots(data, data) == []
+
+
+def test_is_ignored_path_matches_raw_time_limit_regardless_of_index():
+    assert is_ignored_path("time_limit[1][0][1][0][0]")
+    assert is_ignored_path("time_limit")
+    assert not is_ignored_path("applied_time_limits.devices.dev1.remaining_minutes")
+
+
+def test_is_ignored_path_matches_noisy_device_metadata():
+    assert is_ignored_path("apps_and_usage.deviceInfo[0].displayInfo.thumbnail.imageUrl")
+    assert is_ignored_path("apps_and_usage.deviceInfo[3].displayInfo.lastActivityTimeMillis")
+    assert is_ignored_path("apps_and_usage.lastActivityRefreshTimestampMillis")
+    assert is_ignored_path("apps_and_usage.deviceInfo[0].capabilityInfo.capabilities[9]")
+    assert not is_ignored_path("apps_and_usage.deviceInfo[0].displayInfo.friendlyName")
+
+
+def test_diff_ignores_raw_time_limit_and_noisy_metadata_by_default():
+    old = {
+        "time_limit": [[None, 1], [1, 2]],
+        "apps_and_usage": {
+            "deviceInfo": [{"displayInfo": {"thumbnail": {"imageUrl": "https://old"}, "friendlyName": "Chromebook"}}],
+        },
+        "applied_time_limits": {"devices": {"dev1": {"remaining_minutes": 60}}},
+    }
+    new = {
+        "time_limit": [[None, 1], [1, 3]],
+        "apps_and_usage": {
+            "deviceInfo": [{"displayInfo": {"thumbnail": {"imageUrl": "https://new"}, "friendlyName": "Chromebook"}}],
+        },
+        "applied_time_limits": {"devices": {"dev1": {"remaining_minutes": 30}}},
+    }
+    changes = diff_snapshots(old, new)
+    paths = {c.field_path for c in changes}
+    assert paths == {"applied_time_limits.devices.dev1.remaining_minutes"}
+
+
+def test_diff_can_disable_noise_filtering():
+    old = {"time_limit": [1]}
+    new = {"time_limit": [2]}
+    assert diff_snapshots(old, new) == []
+    changes = diff_snapshots(old, new, ignore_noisy_paths=False)
+    assert len(changes) == 1
+    assert changes[0].field_path == "time_limit[0]"

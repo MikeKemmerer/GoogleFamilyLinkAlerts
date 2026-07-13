@@ -146,6 +146,21 @@ def test_settings_page_renders_and_toggle_child(monkeypatch, client, engine):
         assert child.enabled is False
 
 
+def test_settings_reset_baseline_deletes_snapshot(client, engine):
+    from app.db.models import LatestSnapshot
+
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data={"apps_and_usage": {"apps": []}}))
+        s.commit()
+
+    resp = client.post("/settings/children/child1/reset-baseline")
+    assert resp.status_code == 303
+
+    with Session(engine) as s:
+        assert s.get(LatestSnapshot, "child1") is None
+
+
 def test_history_page_lists_events_and_failures(client, engine):
     with Session(engine) as s:
         s.add(Child(id="child1", name="Kiddo"))

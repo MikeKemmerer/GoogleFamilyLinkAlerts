@@ -75,6 +75,31 @@ After setup, the poller runs on a schedule (with jitter) in the background;
 any detected change and any polling failure (e.g. an expired session) is
 pushed to your ntfy topic, and everything is recorded on the History page.
 
+### About the first poll
+
+Google's Family Link has no historical/audit API — it only ever exposes
+*current* state, not a log of past changes. Because of that, this app can't
+literally "import N days of history"; there simply isn't a Google endpoint
+that returns it. Instead, the very **first poll after adding a child**
+establishes a silent baseline: it's stored, but it does **not** generate any
+change notifications or history entries (there's nothing to compare it
+against yet). Every poll after that diffs against the previous one and
+reports/alerts on real differences, correctly timestamped when they were
+actually detected.
+
+If you ever want to force a fresh, silent baseline again — e.g. after making
+a batch of manual changes in Family Link that you don't want a wall of
+alerts about — use the **"Reset baseline"** button next to a child on the
+Settings page. The next poll after that is treated like a first poll again.
+
+Some raw device/app metadata (rotating thumbnail URLs, activity heartbeats,
+a static capability-flag list, and the *unparsed* time-limit schedule
+config) is intentionally excluded from diffing since it isn't a meaningful
+permission change and would otherwise be reported as cryptic paths like
+`time_limit[1][0][1][0][0]`. If you spot other noisy/meaningless fields
+still showing up, please open an issue with the field path so it can be
+added to the ignore list (or properly parsed).
+
 ## Re-authentication
 
 Google sessions eventually expire. When that happens:

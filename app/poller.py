@@ -128,14 +128,26 @@ async def poll_once() -> None:
                 continue
 
             latest = session.get(LatestSnapshot, child.id)
-            old_snapshot = latest.data if latest else None
-            changes = diff_snapshots(old_snapshot, new_snapshot)
 
-            if latest:
-                latest.data = new_snapshot
-                session.add(latest)
-            else:
+            if latest is None:
+                # First-ever snapshot for this child: Family Link's API only
+                # exposes *current* state, not a real change history, so
+                # there is nothing genuine to diff against. Treat this poll
+                # as establishing a silent baseline -- store it and move on
+                # -- rather than reporting every field as a "change from
+                # None", which would flood ChangeEvent/ntfy with hundreds of
+                # entries all timestamped "now" (see README "First poll").
                 session.add(LatestSnapshot(child_id=child.id, data=new_snapshot))
+                session.commit()
+                _LOGGER.info(
+                    "Established baseline snapshot for %s -- future polls will report changes from here.",
+                    child.name,
+                )
+                continue
+
+            changes = diff_snapshots(latest.data, new_snapshot)
+            latest.data = new_snapshot
+            session.add(latest)
 
             events = [
                 ChangeEvent(

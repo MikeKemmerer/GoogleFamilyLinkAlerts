@@ -52,7 +52,7 @@ def db_session(monkeypatch, tmp_path):
     return engine
 
 
-async def test_poll_once_first_snapshot_creates_baseline_changes(monkeypatch, db_session):
+async def test_poll_once_first_snapshot_establishes_silent_baseline(monkeypatch, db_session):
     fake = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 60}}})
     monkeypatch.setattr(poller, "build_api_client", lambda: fake)
 
@@ -64,7 +64,9 @@ async def test_poll_once_first_snapshot_creates_baseline_changes(monkeypatch, db
         assert snapshot is not None
         from sqlmodel import select
         events = s.exec(select(ChangeEvent)).all()
-        assert len(events) > 0
+        # First-ever snapshot is a baseline, not a wall of "changed from None"
+        # events -- see app/poller.py for rationale.
+        assert events == []
 
 
 async def test_poll_once_detects_change_on_second_poll(monkeypatch, db_session):

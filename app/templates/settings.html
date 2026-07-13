@@ -33,11 +33,17 @@
           <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
             <button type="submit">{{ "Disable" if c.enabled else "Enable" }}</button>
           </form>
+          <form method="post" action="/settings/children/{{ c.id }}/reset-baseline" style="display:inline"
+                onsubmit="return confirm('Reset baseline for {{ c.name }}? The next poll will be treated as a fresh start with no change notifications, and any unsynced changes since the last poll will be silently absorbed into the new baseline.');">
+            <button type="submit">Reset baseline</button>
+          </form>
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
+  <p class="hint">"Reset baseline" clears the stored snapshot for a child so the next poll starts fresh
+     without generating change alerts -- handy after a big batch of manual changes you don't want notified about.</p>
 </div>
 
 <div class="card">
