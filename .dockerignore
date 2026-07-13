@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.github/
+data/
+.tmp_data/
+tests/
+tests/_tmp_data/
+*.db
+*.sqlite3
+.env
+.pytest_cache/
+config/config.yaml

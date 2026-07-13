@@ -1,0 +1,69 @@
+# Quick start:
+#   1. cp .env.example .env   (and edit values, especially the two secrets)
+#   2. mkdir -p data/familylink-auth data/app
+#      # Our app container runs as uid 1000 (non-root); make sure it can
+#      # write to its data dir: chown -R 1000:1000 data/app
+#   3. docker compose up -d
+#   4. Open http://<this-host>:${APP_HOST_PORT:-8080} and follow the setup wizard.
+#
+# See README.md for the full walkthrough, the update/rollback runbook, and
+# attribution for the upstream familylink-auth image (MIT licensed, from
+# https://github.com/noiwid/HAFamilyLink -- see third_party/NOTICE.md).
+
+services:
+  # Upstream, unmodified. Runs a real Chromium browser (via Playwright) behind
+  # a noVNC web view so you can complete Google login/2FA yourself, then
+  # exposes the resulting session cookies to our app over /api/cookies.
+  familylink-auth:
+    image: ghcr.io/noiwid/familylink-auth:${FAMILYLINK_AUTH_TAG:-1.7.1-standalone}
+    container_name: familylink-auth
+    ports:
+      - "8099:8099"   # Web UI (used to start the auth flow)
+      - "6080:6080"   # noVNC (used to complete the Google login)
+    volumes:
+      - ./data/familylink-auth:/share/familylink:rw
+    # Chromium needs more than the 64MB default shared memory.
+    shm_size: "2gb"
+    environment:
+      LOG_LEVEL: info
+      AUTH_TIMEOUT: 300
+      SESSION_DURATION: 86400
+      VNC_PASSWORD: ${VNC_PASSWORD:?set VNC_PASSWORD in .env}
+      LANGUAGE: en-US
+      TIMEZONE: ${TIMEZONE:-America/New_York}
+      # Optional: locks down /api/cookies to holders of this key. Recommended,
+      # since that endpoint hands out full Google session cookies.
+      API_KEY: ${FAMILYLINK_AUTH_API_KEY:-}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8099/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Our app: polls Family Link via familylink-auth's cookies, diffs against
+  # the last snapshot, and sends ntfy alerts. Also serves the setup wizard /
+  # settings / change-history web UI.
+  app:
+    image: ghcr.io/mikekemmerer/googlefamilylinkalerts:${APP_IMAGE_TAG:-latest}
+    # For local development from a cloned repo, use the local build instead:
+    # build: .
+    container_name: familylink-alerts
+    depends_on:
+      familylink-auth:
+        condition: service_healthy
+    ports:
+      - "${APP_HOST_PORT:-8080}:8080"
+    volumes:
+      - ./data/app:/data
+    environment:
+      FAMILYLINK_AUTH_BASE_URL: http://familylink-auth:8099
+      FAMILYLINK_AUTH_API_KEY: ${FAMILYLINK_AUTH_API_KEY:-}
+      FAMILYLINK_AUTH_NOVNC_URL: ${FAMILYLINK_AUTH_NOVNC_URL:-http://localhost:6080}
+      APP_DATA_DIR: /data
+      APP_PORT: 8080
+    restart: unless-stopped
