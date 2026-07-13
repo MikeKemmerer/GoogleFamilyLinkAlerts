@@ -72,7 +72,7 @@ def _record_failure(session: Session, kind: str, message: str) -> PollFailure:
 
 async def _maybe_notify_failure(session: Session, failure: PollFailure) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
-    if not ntfy_config:
+    if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
     title, message = format_failure_message(failure.kind, failure.message)
     client = NtfyClient(*ntfy_config)
@@ -84,7 +84,7 @@ async def _maybe_notify_failure(session: Session, failure: PollFailure) -> None:
 
 async def _maybe_notify_changes(session: Session, child_name: str, events: list[ChangeEvent]) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
-    if not ntfy_config:
+    if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
     client = NtfyClient(*ntfy_config)
     for event in events:

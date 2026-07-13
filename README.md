@@ -100,6 +100,20 @@ permission change and would otherwise be reported as cryptic paths like
 still showing up, please open an issue with the field path so it can be
 added to the ignore list (or properly parsed).
 
+### Muting notifications / polling on demand
+
+- **Notifications toggle** — the Settings page has a "Notifications
+  enabled" checkbox. Unchecking it mutes ntfy push alerts (both change
+  alerts and polling-failure alerts) without disabling polling itself --
+  changes and failures are still recorded and visible on the History page,
+  you just won't get pushed a notification for them. Handy if you're doing
+  a bunch of manual changes and don't want to be interrupted, or if you're
+  travelling and don't want alerts for a while.
+- **Poll now** — the Status page (`/`) has a "Poll now" button that runs a
+  poll cycle immediately instead of waiting for the next scheduled
+  interval. Useful right after logging back in, changing a setting, or
+  just to sanity-check that everything's wired up correctly.
+
 ## Re-authentication
 
 Google sessions eventually expire. When that happens:

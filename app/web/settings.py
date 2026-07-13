@@ -33,6 +33,7 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "ntfy_server": ntfy_config[0] if ntfy_config else "",
         "ntfy_topic": ntfy_config[1] if ntfy_config else "",
         "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
+        "notifications_enabled": settings_store.get_notifications_enabled(session),
     })
 
 
@@ -42,9 +43,11 @@ async def settings_post(request: Request, session: Session = Depends(get_db)):
     ntfy_server = form.get("ntfy_server", "").strip()
     ntfy_topic = form.get("ntfy_topic", "").strip()
     poll_interval_minutes = int(form.get("poll_interval_minutes", 20))
+    notifications_enabled = form.get("notifications_enabled") is not None
 
     settings_store.set_ntfy_config(session, ntfy_server, ntfy_topic)
     settings_store.set_poll_interval_minutes(session, poll_interval_minutes)
+    settings_store.set_notifications_enabled(session, notifications_enabled)
 
     scheduler = getattr(request.app.state, "scheduler", None)
     if scheduler is not None:

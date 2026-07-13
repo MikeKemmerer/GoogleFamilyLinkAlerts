@@ -49,6 +49,11 @@
 <div class="card">
   <h2>Alerts &amp; polling</h2>
   <form method="post" action="/settings">
+    <label for="notifications_enabled">
+      <input type="checkbox" id="notifications_enabled" name="notifications_enabled" {% if notifications_enabled %}checked{% endif %}>
+      Notifications enabled
+    </label>
+    <p class="hint">Uncheck to mute ntfy push alerts (changes and polling failures are still recorded on the History page either way).</p>
     <label for="ntfy_server">ntfy server URL</label>
     <input type="url" id="ntfy_server" name="ntfy_server" value="{{ ntfy_server }}" required>
     <label for="ntfy_topic">ntfy topic</label>

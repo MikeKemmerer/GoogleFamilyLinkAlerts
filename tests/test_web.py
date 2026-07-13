@@ -161,6 +161,53 @@ def test_settings_reset_baseline_deletes_snapshot(client, engine):
         assert s.get(LatestSnapshot, "child1") is None
 
 
+def test_settings_page_notifications_toggle_persists(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    from app.db import settings_store
+
+    resp = client.get("/settings")
+    assert "notifications_enabled" in resp.text
+    with Session(engine) as s:
+        # No setting saved yet -- defaults to enabled.
+        assert settings_store.get_notifications_enabled(s) is True
+
+    # Submitting the form without the checkbox present (unchecked) disables it.
+    resp2 = client.post("/settings", data={
+        "ntfy_server": "https://ntfy.sh",
+        "ntfy_topic": "my-topic",
+        "poll_interval_minutes": "20",
+    })
+    assert resp2.status_code == 303
+    with Session(engine) as s:
+        assert settings_store.get_notifications_enabled(s) is False
+
+    # Submitting with the checkbox present (checked) re-enables it.
+    resp3 = client.post("/settings", data={
+        "ntfy_server": "https://ntfy.sh",
+        "ntfy_topic": "my-topic",
+        "poll_interval_minutes": "20",
+        "notifications_enabled": "on",
+    })
+    assert resp3.status_code == 303
+    with Session(engine) as s:
+        assert settings_store.get_notifications_enabled(s) is True
+
+
+def test_poll_now_triggers_poll_and_redirects(monkeypatch, client):
+    called = {"count": 0}
+
+    async def fake_poll_once():
+        called["count"] += 1
+
+    monkeypatch.setattr(status, "poll_once", fake_poll_once)
+
+    resp = client.post("/poll-now")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/?polled=true"
+    assert called["count"] == 1
+
+
 def test_history_page_lists_events_and_failures(client, engine):
     with Session(engine) as s:
         s.add(Child(id="child1", name="Kiddo"))

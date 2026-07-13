@@ -3,6 +3,8 @@
 {% block content %}
 <h1>Family Link Alerts</h1>
 
+{% if polled %}<div class="flash">Poll cycle complete -- check History for any detected changes.</div>{% endif %}
+
 <div class="card">
   <h2>Status</h2>
   <p>
@@ -17,6 +19,9 @@
     <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
        &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a> to re-authenticate.</p>
   {% endif %}
+  <form method="post" action="/poll-now">
+    <button type="submit">Poll now</button>
+  </form>
 </div>
 
 <div class="card">

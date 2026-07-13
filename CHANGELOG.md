@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Added a global "Notifications enabled" toggle on the Settings page to
+  mute ntfy push alerts (changes still recorded in History) without
+  touching poll interval or ntfy server/topic config.
+- Added a "Poll now" button on the Status page to trigger an immediate poll
+  cycle instead of waiting for the next scheduled interval.
 - Fix: the first poll for a newly-added child no longer floods ntfy/history
   with hundreds of "changed from None" events (one per field). Google's
   Family Link API only exposes current state, not historical data, so the

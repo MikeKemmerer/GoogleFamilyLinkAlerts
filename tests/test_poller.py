@@ -110,3 +110,41 @@ async def test_poll_once_records_session_expired(monkeypatch, db_session):
         failures = s.exec(select(PollFailure)).all()
         assert len(failures) == 1
         assert failures[0].kind == "session_expired"
+
+
+async def test_poll_once_skips_ntfy_send_when_notifications_disabled(monkeypatch, db_session):
+    from app.db import settings_store
+
+    fake1 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 60}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()  # establishes baseline
+
+    with Session(db_session) as s:
+        settings_store.set_ntfy_config(s, "https://ntfy.sh", "topic")
+        settings_store.set_notifications_enabled(s, False)
+
+    sent = []
+
+    class FakeNtfy:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def send(self, *args, **kwargs):
+            sent.append((args, kwargs))
+            return True
+
+    monkeypatch.setattr(poller, "NtfyClient", FakeNtfy)
+
+    fake2 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 30}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    assert sent == []
+
+    from sqlmodel import select
+    from app.db.models import ChangeEvent
+    with Session(db_session) as s:
+        events = s.exec(select(ChangeEvent)).all()
+        changed = [e for e in events if e.field_path == "applied_time_limits.devices.dev1.remaining_minutes"]
+        assert len(changed) == 1
+        assert changed[0].notified is False

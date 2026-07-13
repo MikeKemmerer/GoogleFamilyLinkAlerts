@@ -15,6 +15,7 @@ _KEY_POLL_INTERVAL = "poll_interval_minutes"
 _KEY_NTFY_SERVER = "ntfy_server_url"
 _KEY_NTFY_TOPIC = "ntfy_topic"
 _KEY_SETUP_COMPLETED = "setup_completed"
+_KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
 
 
 def get(session: Session, key: str, default: str | None = None) -> str | None:
@@ -63,6 +64,21 @@ def is_setup_completed(session: Session) -> bool:
 
 def mark_setup_completed(session: Session) -> None:
     set_(session, _KEY_SETUP_COMPLETED, "true")
+
+
+def get_notifications_enabled(session: Session) -> bool:
+    """Whether ntfy alerts should actually be sent (default: on).
+
+    This gates delivery only -- change/failure records are still persisted
+    and visible on the History page either way, so muting notifications
+    never hides data, just the push alerts.
+    """
+    raw = get(session, _KEY_NOTIFICATIONS_ENABLED)
+    return raw != "false"
+
+
+def set_notifications_enabled(session: Session, enabled: bool) -> None:
+    set_(session, _KEY_NOTIFICATIONS_ENABLED, "true" if enabled else "false")
 
 
 def all_enabled_children(session: Session):
