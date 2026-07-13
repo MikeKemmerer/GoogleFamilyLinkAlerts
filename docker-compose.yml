@@ -20,7 +20,7 @@ services:
     # proposes a PR when noiwid/HAFamilyLink cuts a new release. Review its
     # changelog before merging, since it handles the sensitive login/cookie
     # flow: https://github.com/noiwid/HAFamilyLink/blob/main/familylink-playwright/CHANGELOG.md
-    image: ghcr.io/noiwid/familylink-auth:1.7.1-standalone
+    image: ghcr.io/noiwid/familylink-auth:1.2.11-standalone
     container_name: familylink-auth
     ports:
       - "8099:8099"   # Web UI (used to start the auth flow)
