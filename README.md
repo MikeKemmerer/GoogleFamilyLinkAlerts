@@ -93,12 +93,21 @@ alerts about — use the **"Reset baseline"** button next to a child on the
 Settings page. The next poll after that is treated like a first poll again.
 
 Some raw device/app metadata (rotating thumbnail URLs, activity heartbeats,
-a static capability-flag list, and the *unparsed* time-limit schedule
-config) is intentionally excluded from diffing since it isn't a meaningful
-permission change and would otherwise be reported as cryptic paths like
-`time_limit[1][0][1][0][0]`. If you spot other noisy/meaningless fields
-still showing up, please open an issue with the field path so it can be
-added to the ignore list (or properly parsed).
+a static capability-flag list, a rolling per-app usage-session window that
+reorders between polls, and the *unparsed* time-limit schedule config) is
+intentionally excluded from diffing since it isn't a meaningful permission
+change and would otherwise be reported as cryptic paths like
+`time_limit[1][0][1][0][0]` -- or, worse, produce constant false-positive
+"changes" from comparing unrelated array entries. If you spot other
+noisy/meaningless fields still showing up, please open an issue with the
+field path so it can be added to the ignore list (or properly parsed).
+
+The History page shows a human-readable label for fields we understand
+well (mainly `applied_time_limits.*`, with device IDs resolved to friendly
+names like "Chromebook"), with the raw field path underneath in small
+print for anyone who wants it. Less-understood raw paths still get a
+best-effort "Title Case → Title Case" rendering instead of the literal
+dotted path.
 
 ### Muting notifications / polling on demand
 

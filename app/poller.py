@@ -20,6 +20,7 @@ from .db import settings_store
 from .db.models import ChangeEvent, LatestSnapshot, PollFailure
 from .db.session import get_session
 from .diff.engine import diff_snapshots
+from .diff.labels import device_names_from_snapshot
 from .familylink.api_client import FamilyLinkApiClient
 from .familylink.auth_client import AuthClient
 from .familylink.exceptions import AuthenticationError, FamilyLinkError, NetworkError, SessionExpiredError
@@ -82,13 +83,20 @@ async def _maybe_notify_failure(session: Session, failure: PollFailure) -> None:
         session.commit()
 
 
-async def _maybe_notify_changes(session: Session, child_name: str, events: list[ChangeEvent]) -> None:
+async def _maybe_notify_changes(
+    session: Session,
+    child_name: str,
+    events: list[ChangeEvent],
+    device_names: dict[str, str] | None = None,
+) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
     client = NtfyClient(*ntfy_config)
     for event in events:
-        title, message = format_change_message(child_name, event.field_path, event.old_value, event.new_value)
+        title, message = format_change_message(
+            child_name, event.field_path, event.old_value, event.new_value, device_names
+        )
         if await client.send(title, message, tags=["bell"]):
             event.notified = True
             session.add(event)
@@ -165,7 +173,8 @@ async def poll_once() -> None:
 
             if events:
                 _LOGGER.info("Detected %d change(s) for %s", len(events), child.name)
-                await _maybe_notify_changes(session, child.name, events)
+                device_names = device_names_from_snapshot(new_snapshot)
+                await _maybe_notify_changes(session, child.name, events, device_names)
 
 
 def _jittered_interval_seconds(minutes: int) -> float:

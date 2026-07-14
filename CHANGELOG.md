@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Fix: `apps_and_usage.appUsageSessions` (a rolling, unstably-ordered
+  per-app usage-time window) and `apps_and_usage.apiHeader.serverTimestampMillis`
+  (the API response's own timestamp) are now excluded from diffing. In a
+  real production deployment these two fields alone accounted for ~92% of
+  all recorded "changes" -- comparing usage sessions at shifting array
+  indices produced constant false positives, and the timestamp field
+  differs on literally every poll. Also drowned out real permission
+  changes on the History page entirely.
+- The History page and ntfy messages now show human-readable labels (e.g.
+  "Chromebook: bedtime starts" instead of
+  "applied_time_limits.devices.aannnppa....bedtime_window.start_ms") for
+  known `applied_time_limits.*` fields, with device IDs resolved to
+  friendly device names. Millisecond timestamps render as real
+  dates/times, booleans as Yes/No, and null as "—". Less-understood raw
+  paths (mainly `apps_and_usage.apps[N].*`) get a generic Title-Case
+  fallback instead of the raw dotted path -- still shown in small print
+  under the label for anyone who wants the raw value.
 - Added a global "Notifications enabled" toggle on the Settings page to
   mute ntfy push alerts (changes still recorded in History) without
   touching poll interval or ntfy server/topic config.

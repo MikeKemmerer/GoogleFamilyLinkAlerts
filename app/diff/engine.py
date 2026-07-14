@@ -36,12 +36,25 @@ _SCALAR_TYPES = (str, int, float, bool, type(None))
 #     app/familylink/api_client.py:_parse_applied_time_limits), so diffing
 #     the raw config just produces cryptic, unresolvable noise until it gets
 #     its own parser (tracked as follow-up work).
-#   - The `apps_and_usage.*` entries below are device/app metadata that
+#   - `apps_and_usage.appUsageSessions[*]` is a rolling window of per-app
+#     daily usage-time telemetry, not a permission/setting -- and worse,
+#     each poll can return the same sessions at *different array indices*
+#     (the window shifts as old days roll off), so diffing by index compares
+#     unrelated sessions against each other and reports them as changed
+#     even when nothing did. In production this alone was ~92% of all
+#     recorded "changes" -- see CHANGELOG.
+#   - `apps_and_usage.apiHeader.serverTimestampMillis` is the API response's
+#     own timestamp, not app/device data -- it's different on literally
+#     every single poll, so it would otherwise guarantee at least one
+#     "change" every cycle forever.
+#   - The other `apps_and_usage.*` entries below are device metadata that
 #     changes constantly on its own (rotating signed thumbnail URLs, activity
 #     heartbeats, a static capability-flag list) and isn't a "permission"
 #     change a parent would want an alert for.
 DEFAULT_IGNORED_PATH_PATTERNS: tuple[str, ...] = (
     r"^time_limit(\.|\[|$)",
+    r"^apps_and_usage\.appUsageSessions(\[\*\]|$)",
+    r"^apps_and_usage\.apiHeader\.serverTimestampMillis$",
     r"^apps_and_usage\.lastActivityRefreshTimestampMillis$",
     r"^apps_and_usage\.deviceInfo\[\*\]\.displayInfo\.thumbnail\.imageUrl$",
     r"^apps_and_usage\.deviceInfo\[\*\]\.displayInfo\.lastActivityTimeMillis$",

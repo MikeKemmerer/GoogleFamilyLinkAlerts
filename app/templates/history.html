@@ -19,19 +19,19 @@
 
 <div class="card">
   <h2>Detected changes</h2>
-  {% if not events %}
+  {% if not rows %}
     <p class="muted">No changes detected yet.</p>
   {% else %}
   <table>
-    <thead><tr><th>When</th><th>Child</th><th>Field</th><th>Old</th><th>New</th></tr></thead>
+    <thead><tr><th>When</th><th>Child</th><th>Change</th><th>Old</th><th>New</th></tr></thead>
     <tbody>
-    {% for e in events %}
+    {% for row in rows %}
       <tr>
-        <td>{{ e.detected_at }}</td>
-        <td>{{ child_names.get(e.child_id, e.child_id) }}</td>
-        <td>{{ e.field_path }}</td>
-        <td>{{ e.old_value }}</td>
-        <td>{{ e.new_value }}</td>
+        <td>{{ row.detected_at }}</td>
+        <td>{{ row.child_name }}</td>
+        <td>{{ row.label }}<div class="field-path">{{ row.field_path }}</div></td>
+        <td>{{ row.old_display }}</td>
+        <td>{{ row.new_display }}</td>
       </tr>
     {% endfor %}
     </tbody>

@@ -11,6 +11,8 @@ import logging
 
 import httpx
 
+from ..diff.labels import humanize_field_path, humanize_value
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -44,10 +46,19 @@ class NtfyClient:
             return False
 
 
-def format_change_message(child_name: str, field_path: str, old_value, new_value) -> tuple[str, str]:
+def format_change_message(
+    child_name: str,
+    field_path: str,
+    old_value,
+    new_value,
+    device_names: dict[str, str] | None = None,
+) -> tuple[str, str]:
     """Build a human-readable (title, message) pair for a settings change."""
     title = f"Family Link change: {child_name}"
-    message = f"{field_path}\n{old_value!r} -> {new_value!r}"
+    label = humanize_field_path(field_path, device_names)
+    old_display = humanize_value(field_path, old_value)
+    new_display = humanize_value(field_path, new_value)
+    message = f"{label}\n{old_display} -> {new_display}"
     return title, message
 
 

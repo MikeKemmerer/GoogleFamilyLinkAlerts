@@ -69,6 +69,23 @@ def test_is_ignored_path_matches_noisy_device_metadata():
     assert not is_ignored_path("apps_and_usage.deviceInfo[0].displayInfo.friendlyName")
 
 
+def test_is_ignored_path_matches_app_usage_sessions_regardless_of_index():
+    # appUsageSessions is a rolling window that reorders between polls --
+    # diffing it by array index produces false-positive "changes" comparing
+    # unrelated sessions. Confirmed in production to be ~92% of all noise.
+    assert is_ignored_path("apps_and_usage.appUsageSessions[9].usage")
+    assert is_ignored_path("apps_and_usage.appUsageSessions[97].appId.androidAppPackageName")
+    assert is_ignored_path("apps_and_usage.appUsageSessions")
+    assert not is_ignored_path("apps_and_usage.apps[3].title")
+
+
+def test_is_ignored_path_matches_api_header_timestamp():
+    # This is the API response's own timestamp, not app/device data -- it
+    # differs on every single poll and would otherwise guarantee a "change"
+    # every cycle forever.
+    assert is_ignored_path("apps_and_usage.apiHeader.serverTimestampMillis")
+
+
 def test_diff_ignores_raw_time_limit_and_noisy_metadata_by_default():
     old = {
         "time_limit": [[None, 1], [1, 2]],
