@@ -182,6 +182,38 @@ async def test_poll_once_skips_preinstalled_system_apps_in_discovery(monkeypatch
         assert [r.package_name for r in rules] == ["com.tiktok.android"]
 
 
+async def test_poll_once_skips_oem_apps_with_nonzero_install_time(monkeypatch, db_session):
+    # Some OEM apps (e.g. Samsung's "Reminder") get a real install
+    # timestamp despite being pre-installed bloat -- filtered by package
+    # prefix instead of install time in that case.
+    apps_and_usage = {
+        "apps": [
+            {
+                "title": "Reminder",
+                "packageName": "com.samsung.android.app.reminder",
+                "installTimeMillis": "1640995200000",
+                "supervisionSetting": {"hidden": True},
+            },
+            {
+                "title": "TikTok",
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
+                "supervisionSetting": {"hidden": True},
+            },
+        ]
+    }
+    fake = FakeApiClient(apps_and_usage=apps_and_usage)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    from app.db.models import AppRule
+    from sqlmodel import select
+    with Session(db_session) as s:
+        rules = s.exec(select(AppRule)).all()
+        assert [r.package_name for r in rules] == ["com.tiktok.android"]
+
+
 async def test_poll_once_reblocks_always_blocked_app_found_enabled(monkeypatch, db_session):
     from app.db.models import AppRule
 

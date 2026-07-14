@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Fix: the "Blocked apps" auto-discovery also now excludes OEM/carrier
+  system apps by known package-name prefix (`com.samsung.`, `com.sec.`,
+  `com.tmobile.`, etc.), since some of them (e.g. Samsung's "Reminder",
+  "Modes and Routines") have a real install timestamp despite being
+  pre-installed bloat, so the `installTimeMillis == 0` check alone missed
+  them. Verified against live data: cut one child's list from 34 down to
+  the apps a parent actually recognizes.
 - Fix: the "Blocked apps" auto-discovery (see below) now skips pre-installed
   OEM/carrier system apps (Samsung Knox internals, "Galaxy Finder", etc.),
   identified by `installTimeMillis == 0`. On real production data this cut

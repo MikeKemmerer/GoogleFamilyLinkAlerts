@@ -108,23 +108,48 @@ def _iter_apps(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     return snapshot.get("apps_and_usage", {}).get("apps", []) or []
 
 
-def _is_preinstalled_system_app(app: dict[str, Any]) -> bool:
+# OEM/carrier package-name prefixes to exclude from blocked-app discovery --
+# these are pre-installed system components a parent never chose to
+# install, not real "block this app" decisions. Not exhaustive; add more
+# here if other OEM/carrier bloat shows up on real data (see README's
+# "Always-blocked apps" section). Deliberately does NOT include
+# `com.google.*` -- Google apps (YouTube, Meet, etc.) are legitimate
+# consumer apps a parent may genuinely want to enforce blocking on, even
+# though they're pre-installed on most Android phones.
+_SYSTEM_APP_PACKAGE_PREFIXES: tuple[str, ...] = (
+    "com.samsung.",
+    "com.sec.",
+    "com.tmobile.",
+    "com.verizon.",
+    "com.att.",
+    "com.sprint.",
+    "com.lge.",
+    "com.motorola.",
+    "com.htc.",
+)
+
+
+def _is_preinstalled_system_app(app: dict[str, Any], package_name: str) -> bool:
     """Whether an app looks like OEM/carrier bloatware rather than something
     a parent actually chose to install and then block.
 
     Family Link hides a large number of pre-installed system components by
     default (Samsung Knox internals, "Galaxy Finder", "Game Home", etc.) --
-    on real production data this was ~100 of 145 apps for one child, nearly
-    all of them junk with `installTimeMillis == "0"` (i.e. never actually
-    "installed" by anyone, just present since device setup). Excluding
-    those keeps the Settings page's "Blocked apps" list limited to apps a
-    parent would recognize and might want to enforce.
+    on real production data this was ~100 of 145 apps for one child. Most
+    have `installTimeMillis == "0"` (never actually "installed" by anyone,
+    just present since device setup), but some OEM/carrier apps get a real
+    install timestamp anyway (e.g. Samsung's "Reminder", "Modes and
+    Routines") -- so we also exclude by known OEM/carrier package prefixes.
+    Excluding these keeps the Settings page's "Blocked apps" list limited
+    to apps a parent would recognize and might want to enforce.
     """
     install_time = app.get("installTimeMillis")
     try:
-        return int(install_time) == 0
+        if int(install_time) == 0:
+            return True
     except (TypeError, ValueError):
-        return False
+        pass
+    return package_name.startswith(_SYSTEM_APP_PACKAGE_PREFIXES)
 
 
 def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -> None:
@@ -144,7 +169,7 @@ def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -
         hidden = bool((app.get("supervisionSetting") or {}).get("hidden"))
         if not hidden:
             continue
-        if _is_preinstalled_system_app(app):
+        if _is_preinstalled_system_app(app, package_name):
             continue
         title = app.get("title") or package_name
         rule = session.get(AppRule, (child_id, package_name))
