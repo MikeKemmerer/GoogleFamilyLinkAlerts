@@ -15,6 +15,10 @@ action.** Use a dedicated secondary-parent Google account rather than your
 primary account, and use at your own risk. This project is not affiliated
 with, endorsed by, or connected to Google LLC.
 
+The project is read-only monitoring by default. The one exception is the
+opt-in "always-blocked apps" feature (see below), which can issue a genuine
+write/mutation call back to Family Link — everything else only ever reads.
+
 ## How it works
 
 - An unmodified copy of
@@ -122,6 +126,25 @@ dotted path.
   poll cycle immediately instead of waiting for the next scheduled
   interval. Useful right after logging back in, changing a setting, or
   just to sanity-check that everything's wired up correctly.
+
+### Always-blocked apps (the one write feature)
+
+Everything else in this project is read-only monitoring, but this feature is
+the one deliberate exception: the Settings page tracks every app it has
+ever seen blocked in Family Link, per child, in an expandable "Blocked apps"
+section. Checking "Always blocked" next to an app opts it into enforcement —
+on every future poll, if that app is found enabled again (by the child, or
+anyone else), the app immediately calls Family Link's block-app endpoint to
+re-block it, in the same poll cycle. You'll still get a normal change alert
+for the "re-enabled" event (so you know it happened), plus a separate
+high-priority alert confirming it was auto-re-blocked.
+
+This uses the same reverse-engineered, unofficial API as the rest of the
+app (see [`third_party/NOTICE.md`](third_party/NOTICE.md)) but is a genuine
+write/mutation call, not just a read — keep that in mind given the ToS
+caveat above; a bug here could in theory block/unblock the wrong app. Apps
+only appear in this list after being observed blocked at least once; there's
+no manual "add any app" entry point.
 
 ## Re-authentication
 

@@ -70,6 +70,27 @@ class PollFailure(SQLModel, table=True):
     notified: bool = Field(default=False)
 
 
+class AppRule(SQLModel, table=True):
+    """A per-child app that has been seen blocked at least once.
+
+    Rows are auto-discovered by the poller (see app/poller.py) whenever an
+    app's `supervisionSetting.hidden` flag is observed True for a child --
+    this just builds up a running list for the Settings page, regardless of
+    `always_blocked`. Setting `always_blocked=True` opts a specific app into
+    enforcement: if a later poll finds it re-enabled, the poller immediately
+    re-blocks it via FamilyLinkApiClient.block_app (see NOTICE.md -- this is
+    the one write/mutation capability this project supports, and only for
+    apps a parent explicitly opted in here).
+    """
+
+    child_id: str = Field(primary_key=True, foreign_key="child.id")
+    package_name: str = Field(primary_key=True)
+    title: str
+    always_blocked: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=_utcnow)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class AppSetting(SQLModel, table=True):
     """Simple key/value store for first-run wizard + ongoing app settings.
 

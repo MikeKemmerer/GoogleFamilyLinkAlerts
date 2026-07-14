@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 
 from ..config import settings
 from ..db import settings_store
-from ..db.models import Child, LatestSnapshot
+from ..db.models import AppRule, Child, LatestSnapshot
 from .deps import build_auth_client, get_db, templates
 
 router = APIRouter()
@@ -21,6 +21,12 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
 
     ntfy_config = settings_store.get_ntfy_config(session)
     children = session.exec(select(Child)).all()
+    app_rules = session.exec(select(AppRule)).all()
+    blocked_apps_by_child: dict[str, list[AppRule]] = {}
+    for rule in app_rules:
+        blocked_apps_by_child.setdefault(rule.child_id, []).append(rule)
+    for rules in blocked_apps_by_child.values():
+        rules.sort(key=lambda r: r.title.lower())
 
     return templates.TemplateResponse(request, "settings.html", {
         "setup_completed": True,
@@ -30,6 +36,7 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "auth_ui_url": settings.familylink_auth_ui_url_with_key,
         "novnc_url": settings.familylink_auth_novnc_url,
         "children": children,
+        "blocked_apps_by_child": blocked_apps_by_child,
         "ntfy_server": ntfy_config[0] if ntfy_config else "",
         "ntfy_topic": ntfy_config[1] if ntfy_config else "",
         "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
@@ -79,5 +86,21 @@ async def reset_baseline(child_id: str, session: Session = Depends(get_db)):
     snapshot = session.get(LatestSnapshot, child_id)
     if snapshot:
         session.delete(snapshot)
+        session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
+@router.post("/settings/children/{child_id}/apps/{package_name}/toggle-always-blocked")
+async def toggle_always_blocked(child_id: str, package_name: str, session: Session = Depends(get_db)):
+    """Flip an app's `always_blocked` flag.
+
+    When enabled, the poller (see app/poller.py:_enforce_always_blocked_apps)
+    will immediately re-block this app on any poll where it's found enabled,
+    instead of just alerting that it changed.
+    """
+    rule = session.get(AppRule, (child_id, package_name))
+    if rule:
+        rule.always_blocked = not rule.always_blocked
+        session.add(rule)
         session.commit()
     return RedirectResponse("/settings", status_code=303)

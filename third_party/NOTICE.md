@@ -30,6 +30,15 @@ reproduced here and/or alongside the adapted code.
    (website-filter monitoring, generic snapshot diffing, alerting, and the
    web UI) are original work.
 
+3. **App block/unblock mutation calls** — `FamilyLinkApiClient.block_app`/
+   `unblock_app` (`app/familylink/api_client.py`) are adapted from
+   HAFamilyLink's `async_block_app`/`async_unblock_app`
+   (`apps:updateRestrictions` endpoint). This is the one write/mutation
+   capability this project supports, used narrowly by the opt-in "always
+   blocked" app-enforcement feature (see the Settings page and
+   `app/poller.py:_enforce_always_blocked_apps`) — everything else remains
+   read-only monitoring.
+
 Both pieces are used under the MIT license's permissive terms, which allow
 use, modification, and redistribution provided the copyright notice and
 license text are retained — hence this file and the accompanying license

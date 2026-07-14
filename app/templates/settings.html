@@ -39,6 +39,40 @@
           </form>
         </td>
       </tr>
+      <tr>
+        <td colspan="3">
+          <details>
+            <summary>Blocked apps ({{ (blocked_apps_by_child.get(c.id) or [])|length }})</summary>
+            {% set rules = blocked_apps_by_child.get(c.id) or [] %}
+            {% if rules %}
+              <table>
+                <thead><tr><th>App</th><th>Always blocked</th><th></th></tr></thead>
+                <tbody>
+                {% for r in rules %}
+                  <tr>
+                    <td>{{ r.title }}</td>
+                    <td>{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
+                    <td>
+                      <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
+                        <label>
+                          <input type="checkbox" onchange="this.form.requestSubmit()" {% if r.always_blocked %}checked{% endif %}>
+                          Always blocked
+                        </label>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+              <p class="hint">Checking "Always blocked" means: if this app is ever found enabled on a future
+                 poll (re-enabled by the child, or anyone else), the next poll immediately blocks it again.</p>
+            {% else %}
+              <p class="hint">No apps have been seen blocked for {{ c.name }} yet. Apps show up here the first
+                 time a poll observes them blocked in Family Link.</p>
+            {% endif %}
+          </details>
+        </td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>

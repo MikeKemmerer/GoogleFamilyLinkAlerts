@@ -11,12 +11,14 @@ class FakeApiClient:
     """Stands in for FamilyLinkApiClient in poller tests."""
 
     def __init__(self, apps_and_usage=None, time_limit=None, applied_time_limits=None,
-                 raise_on_authenticate=None, raise_on_fetch=None):
+                 raise_on_authenticate=None, raise_on_fetch=None, raise_on_block=None):
         self._apps_and_usage = apps_and_usage or {"apps": []}
         self._time_limit = time_limit or {}
         self._applied_time_limits = applied_time_limits or {}
         self._raise_on_authenticate = raise_on_authenticate
         self._raise_on_fetch = raise_on_fetch
+        self._raise_on_block = raise_on_block
+        self.blocked: list[tuple[str, str]] = []
 
     async def authenticate(self):
         if self._raise_on_authenticate:
@@ -32,6 +34,11 @@ class FakeApiClient:
 
     async def get_applied_time_limits(self, child_id, tz=None):
         return self._applied_time_limits
+
+    async def block_app(self, child_id, package_name):
+        if self._raise_on_block:
+            raise self._raise_on_block
+        self.blocked.append((child_id, package_name))
 
 
 @pytest.fixture
@@ -110,6 +117,125 @@ async def test_poll_once_records_session_expired(monkeypatch, db_session):
         failures = s.exec(select(PollFailure)).all()
         assert len(failures) == 1
         assert failures[0].kind == "session_expired"
+
+
+async def test_poll_once_discovers_blocked_app_into_app_rule(monkeypatch, db_session):
+    apps_and_usage = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "appId": {"androidAppPackageName": "com.tiktok.android"},
+                "supervisionSetting": {"hidden": True},
+            },
+            {
+                "title": "Chrome",
+                "appId": {"androidAppPackageName": "com.android.chrome"},
+                "supervisionSetting": {"hidden": False},
+            },
+        ]
+    }
+    fake = FakeApiClient(apps_and_usage=apps_and_usage)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    from app.db.models import AppRule
+    from sqlmodel import select
+    with Session(db_session) as s:
+        rules = s.exec(select(AppRule)).all()
+        assert len(rules) == 1
+        assert rules[0].package_name == "com.tiktok.android"
+        assert rules[0].title == "TikTok"
+        assert rules[0].always_blocked is False
+
+
+async def test_poll_once_reblocks_always_blocked_app_found_enabled(monkeypatch, db_session):
+    from app.db.models import AppRule
+
+    with Session(db_session) as s:
+        s.add(AppRule(
+            child_id="child1", package_name="com.tiktok.android",
+            title="TikTok", always_blocked=True,
+        ))
+        s.commit()
+
+    apps_and_usage = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "appId": {"androidAppPackageName": "com.tiktok.android"},
+                "supervisionSetting": {"hidden": False},
+            },
+        ]
+    }
+    fake = FakeApiClient(apps_and_usage=apps_and_usage)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    assert fake.blocked == [("child1", "com.tiktok.android")]
+
+    # The just-fetched snapshot is patched in place before being stored, so
+    # the very same poll's stored snapshot already reflects "blocked again"
+    # rather than waiting a full extra cycle to catch up.
+    from app.db.models import LatestSnapshot
+    with Session(db_session) as s:
+        latest = s.get(LatestSnapshot, "child1")
+        assert latest.data["apps_and_usage"]["apps"][0]["supervisionSetting"]["hidden"] is True
+
+
+async def test_poll_once_skips_reblock_when_already_blocked(monkeypatch, db_session):
+    from app.db.models import AppRule
+
+    with Session(db_session) as s:
+        s.add(AppRule(
+            child_id="child1", package_name="com.tiktok.android",
+            title="TikTok", always_blocked=True,
+        ))
+        s.commit()
+
+    apps_and_usage = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "appId": {"androidAppPackageName": "com.tiktok.android"},
+                "supervisionSetting": {"hidden": True},
+            },
+        ]
+    }
+    fake = FakeApiClient(apps_and_usage=apps_and_usage)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    assert fake.blocked == []
+
+
+async def test_poll_once_logs_but_continues_when_reblock_fails(monkeypatch, db_session):
+    from app.db.models import AppRule
+    from app.familylink.exceptions import NetworkError
+
+    with Session(db_session) as s:
+        s.add(AppRule(
+            child_id="child1", package_name="com.tiktok.android",
+            title="TikTok", always_blocked=True,
+        ))
+        s.commit()
+
+    apps_and_usage = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "appId": {"androidAppPackageName": "com.tiktok.android"},
+                "supervisionSetting": {"hidden": False},
+            },
+        ]
+    }
+    fake = FakeApiClient(apps_and_usage=apps_and_usage, raise_on_block=NetworkError("boom"))
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    # Should not raise -- enforcement failures are logged, not fatal.
+    await poller.poll_once()
 
 
 async def test_poll_once_skips_ntfy_send_when_notifications_disabled(monkeypatch, db_session):

@@ -4,6 +4,19 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Added an opt-in "always blocked" app enforcement feature: the Settings
+  page now lists every app ever seen blocked in Family Link, per child,
+  in an expandable "Blocked apps" section. Checking "Always blocked" for
+  an app means that if a future poll finds it enabled again, the app
+  immediately calls Family Link's block-app endpoint to re-block it in the
+  same poll cycle, and sends a dedicated high-priority ntfy alert
+  confirming the auto-re-block (in addition to the normal change alert for
+  the "re-enabled" event itself). This is the project's first write/
+  mutation capability -- see `third_party/NOTICE.md` for attribution and
+  the README's "Always-blocked apps" section for details/caveats.
+- Fix: `LatestSnapshot.updated_at` was never bumped on subsequent polls
+  (only `data` was refreshed), so the stored timestamp looked stale even
+  though the snapshot itself was current.
 - Fix: bedtime/school-time schedule matching (`bedtime_active`,
   `bedtime_enabled_today`, `schooltime_active`, `schooltime_enabled_today`,
   and the displayed bedtime/school-time start/end clock times) is now

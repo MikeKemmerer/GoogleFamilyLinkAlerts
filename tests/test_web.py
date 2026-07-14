@@ -161,6 +161,27 @@ def test_settings_reset_baseline_deletes_snapshot(client, engine):
         assert s.get(LatestSnapshot, "child1") is None
 
 
+def test_settings_page_lists_blocked_apps_and_toggle_always_blocked(monkeypatch, client, engine):
+    from app.db.models import AppRule
+
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(AppRule(child_id="child1", package_name="com.tiktok.android", title="TikTok", always_blocked=False))
+        s.commit()
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "TikTok" in resp.text
+
+    resp2 = client.post("/settings/children/child1/apps/com.tiktok.android/toggle-always-blocked")
+    assert resp2.status_code == 303
+
+    with Session(engine) as s:
+        rule = s.get(AppRule, ("child1", "com.tiktok.android"))
+        assert rule.always_blocked is True
+
+
 def test_settings_page_notifications_toggle_persists(monkeypatch, client, engine):
     monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
 

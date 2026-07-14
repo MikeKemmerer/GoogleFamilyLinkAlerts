@@ -1,12 +1,15 @@
-"""Google Family Link API client (read-only, monitoring-focused).
+"""Google Family Link API client (mostly read-only, monitoring-focused).
 
 Adapted from `custom_components/familylink/client/api.py` in
 noiwid/HAFamilyLink (MIT licensed — see third_party/NOTICE.md). That project
 reverse-engineered these endpoints for a Home Assistant integration that
 both reads *and* controls Family Link. This project only needs to *read*
-settings in order to detect and alert on changes, so only the read/query
-methods are ported here; control/mutation endpoints (block app, set bedtime,
-add time bonus, lock device, etc.) are intentionally out of scope.
+settings in order to detect and alert on changes, so most control/mutation
+endpoints (set bedtime, add time bonus, lock device, etc.) are intentionally
+out of scope. The one exception is `block_app`/`unblock_app`, used narrowly
+by the "always blocked" app-enforcement feature (see app/poller.py) so a
+parent can opt specific apps into "if this ever gets re-enabled, block it
+again immediately" -- everything else remains read-only.
 
 The `appliedTimeLimits` response is an undocumented, deeply nested
 positional array (not a named JSON object), reverse-engineered by inspecting
@@ -18,6 +21,7 @@ If Google changes this response shape, only this file should need fixing.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import time
@@ -33,7 +37,12 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class FamilyLinkApiClient:
-    """Read-only client for Google's internal Family Link API."""
+    """Mostly-read-only client for Google's internal Family Link API.
+
+    The only mutation methods are `block_app`/`unblock_app`, used solely by
+    the opt-in "always blocked" app-enforcement feature. Everything else is
+    read-only monitoring.
+    """
 
     # Reverse-engineered endpoints (see NOTICE.md attribution above).
     BASE_URL = "https://kidsmanagement-pa.clients6.google.com/kidsmanagement/v1"
@@ -183,6 +192,32 @@ class FamilyLinkApiClient:
             raise NetworkError(f"GET {url} returned HTTP {resp.status_code}: {resp.text[:500]}")
         return resp.json()
 
+    async def _post(self, url: str, payload: Any,
+                     content_type: str = "application/json+protobuf") -> Any:
+        if not self.is_authenticated():
+            raise AuthenticationError("Not authenticated")
+        headers = {
+            **self._auth_headers(),
+            "Content-Type": content_type,
+            "Cookie": self._get_cookie_header(),
+        }
+        # Send the pre-serialized body ourselves (rather than httpx's `json=`
+        # kwarg) so we control the exact bytes/content-type sent -- these
+        # endpoints use `application/json+protobuf`, matching the read
+        # endpoints above, not plain `application/json`.
+        body = json.dumps(payload).encode("utf-8")
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, content=body, headers=headers)
+        except httpx.HTTPError as err:
+            raise NetworkError(f"Request to {url} failed: {err}") from err
+
+        if resp.status_code == 401:
+            raise SessionExpiredError("Session expired, please re-authenticate")
+        if resp.status_code != 200:
+            raise NetworkError(f"POST {url} returned HTTP {resp.status_code}: {resp.text[:500]}")
+        return resp.json() if resp.content else None
+
     # -- Discovery -----------------------------------------------------
 
     async def get_family_members(self) -> dict[str, Any]:
@@ -213,6 +248,45 @@ class FamilyLinkApiClient:
             ("capabilities", "CAPABILITY_SUPERVISION_CAPABILITIES"),
         ]
         return await self._get(self._people_url(account_id, "appsandusage"), params=params)
+
+    @staticmethod
+    def get_app_package_name(app: dict[str, Any]) -> str | None:
+        """Extract an app's package name from a `apps_and_usage.apps[N]` entry.
+
+        Not documented anywhere -- inferred from the sibling
+        `appUsageSessions[*].appId.androidAppPackageName` shape (see
+        app/diff/engine.py's ignore patterns), since Google's app identifiers
+        appear to consistently use an `appId` oneof wrapper. Falls back to a
+        flat `packageName` key in case that assumption is wrong for this
+        response. If both are absent, callers should skip the app rather
+        than guess -- this is the one place enforcement correctness depends
+        on Google's exact field names, so keep it isolated here for easy
+        fixing if it turns out to be wrong on real data.
+        """
+        app_id = app.get("appId")
+        if isinstance(app_id, dict):
+            package = app_id.get("androidAppPackageName")
+            if package:
+                return package
+        return app.get("packageName")
+
+    async def block_app(self, account_id: str, package_name: str) -> None:
+        """Block a specific app for a child (opt-in "always blocked" enforcement only).
+
+        Ported from noiwid/HAFamilyLink's `async_block_app` (MIT licensed --
+        see third_party/NOTICE.md). Payload shape:
+        `[account_id, [[[package_name], [1]]]]` where the trailing `[1]` is
+        the "hidden"/block flag.
+        """
+        self._validate_id(account_id, "account_id")
+        payload = [account_id, [[[package_name], [1]]]]
+        await self._post(self._people_url(account_id, "apps:updateRestrictions"), payload)
+
+    async def unblock_app(self, account_id: str, package_name: str) -> None:
+        """Remove a block placed by `block_app` (empty array clears the restriction)."""
+        self._validate_id(account_id, "account_id")
+        payload = [account_id, [[[package_name], []]]]
+        await self._post(self._people_url(account_id, "apps:updateRestrictions"), payload)
 
     async def get_time_limit(self, account_id: str) -> dict[str, Any]:
         """Bedtime/school-time rule configuration (schedules, enabled flags)."""

@@ -62,3 +62,49 @@ def test_parse_applied_time_limits_defaults_to_utc_when_no_tz_given(monkeypatch)
 
     result = FamilyLinkApiClient._parse_applied_time_limits(data)
     assert result["bedtime_enabled_today"] is True
+
+
+def test_get_app_package_name_prefers_app_id_wrapper():
+    app = {"appId": {"androidAppPackageName": "com.tiktok.android"}, "packageName": "ignored"}
+    assert FamilyLinkApiClient.get_app_package_name(app) == "com.tiktok.android"
+
+
+def test_get_app_package_name_falls_back_to_flat_key():
+    app = {"packageName": "com.tiktok.android"}
+    assert FamilyLinkApiClient.get_app_package_name(app) == "com.tiktok.android"
+
+
+def test_get_app_package_name_returns_none_when_absent():
+    assert FamilyLinkApiClient.get_app_package_name({}) is None
+
+
+async def test_block_app_posts_expected_restriction_payload(monkeypatch):
+    client = FamilyLinkApiClient(auth_client=None)
+    calls = []
+
+    async def fake_post(url, payload, **kwargs):
+        calls.append((url, payload))
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    await client.block_app("child1", "com.tiktok.android")
+
+    assert len(calls) == 1
+    url, payload = calls[0]
+    assert url == f"{FamilyLinkApiClient.BASE_URL}/people/child1/apps:updateRestrictions"
+    assert payload == ["child1", [[["com.tiktok.android"], [1]]]]
+
+
+async def test_unblock_app_posts_empty_restriction_payload(monkeypatch):
+    client = FamilyLinkApiClient(auth_client=None)
+    calls = []
+
+    async def fake_post(url, payload, **kwargs):
+        calls.append((url, payload))
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    await client.unblock_app("child1", "com.tiktok.android")
+
+    assert len(calls) == 1
+    url, payload = calls[0]
+    assert url == f"{FamilyLinkApiClient.BASE_URL}/people/child1/apps:updateRestrictions"
+    assert payload == ["child1", [[["com.tiktok.android"], []]]]

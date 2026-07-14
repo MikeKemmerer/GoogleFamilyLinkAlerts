@@ -9,15 +9,16 @@ from __future__ import annotations
 
 import logging
 import random
+from datetime import datetime, timezone
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from .config import settings
 from .db import settings_store
-from .db.models import ChangeEvent, LatestSnapshot, PollFailure
+from .db.models import AppRule, ChangeEvent, Child, LatestSnapshot, PollFailure
 from .db.session import get_session
 from .diff.engine import diff_snapshots
 from .diff.labels import device_names_from_snapshot
@@ -103,6 +104,87 @@ async def _maybe_notify_changes(
     session.commit()
 
 
+def _iter_apps(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    return snapshot.get("apps_and_usage", {}).get("apps", []) or []
+
+
+def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -> None:
+    """Upsert an `AppRule` row for every app ever seen blocked for this child.
+
+    Runs on every poll, independent of `always_blocked` -- this just builds
+    the running "apps that have been blocked at least once" list the
+    Settings page shows, so a parent can opt any of them into enforcement
+    later. Newly-discovered apps default to `always_blocked=False`.
+    """
+    for app in _iter_apps(snapshot):
+        package_name = FamilyLinkApiClient.get_app_package_name(app)
+        if not package_name:
+            continue
+        hidden = bool((app.get("supervisionSetting") or {}).get("hidden"))
+        if not hidden:
+            continue
+        title = app.get("title") or package_name
+        rule = session.get(AppRule, (child_id, package_name))
+        if rule is None:
+            session.add(AppRule(child_id=child_id, package_name=package_name, title=title))
+        elif rule.title != title:
+            rule.title = title
+            rule.updated_at = datetime.now(timezone.utc)
+            session.add(rule)
+    session.commit()
+
+
+async def _enforce_always_blocked_apps(
+    session: Session, client: FamilyLinkApiClient, child: Child, snapshot: dict[str, Any]
+) -> None:
+    """Immediately re-block any app a parent opted into "always blocked"
+    if this poll's snapshot shows it currently enabled.
+
+    Runs every poll cycle, right after the fresh snapshot is fetched --
+    `snapshot` is mutated in place to reflect the re-block so the diff
+    below still reports the underlying "someone re-enabled it" change
+    (a parent likely wants to know that happened) while also correctly
+    showing it as blocked again by the end of this same cycle, rather than
+    only becoming visible on the next poll.
+    """
+    rules = session.exec(
+        select(AppRule).where(AppRule.child_id == child.id, AppRule.always_blocked == True)  # noqa: E712
+    ).all()
+    if not rules:
+        return
+    apps_by_package = {
+        FamilyLinkApiClient.get_app_package_name(app): app for app in _iter_apps(snapshot)
+    }
+    for rule in rules:
+        app = apps_by_package.get(rule.package_name)
+        if app is None:
+            continue  # app no longer present (e.g. uninstalled) -- nothing to enforce
+        supervision = app.setdefault("supervisionSetting", {}) or {}
+        if supervision.get("hidden"):
+            continue  # already blocked, nothing to do
+        try:
+            await client.block_app(child.id, rule.package_name)
+        except (NetworkError, FamilyLinkError) as err:
+            _LOGGER.warning("Failed to re-block %s for %s: %s", rule.package_name, child.name, err)
+            continue
+        _LOGGER.info("Re-blocked %s for %s (always-blocked rule)", rule.title or rule.package_name, child.name)
+        supervision["hidden"] = True
+        await _maybe_notify_enforcement(session, child.name, rule)
+
+
+async def _maybe_notify_enforcement(session: Session, child_name: str, rule: AppRule) -> None:
+    ntfy_config = settings_store.get_ntfy_config(session)
+    if not ntfy_config or not settings_store.get_notifications_enabled(session):
+        return
+    client = NtfyClient(*ntfy_config)
+    title = f"Family Link: re-blocked app for {child_name}"
+    message = (
+        f"{rule.title or rule.package_name} was re-enabled but is set to always be "
+        f"blocked -- blocked it again automatically."
+    )
+    await client.send(title, message, priority="high", tags=["no_entry_sign"])
+
+
 async def poll_once() -> None:
     """Run a single poll cycle across all enabled children."""
     with get_session() as session:
@@ -135,6 +217,9 @@ async def poll_once() -> None:
                 await _maybe_notify_failure(session, failure)
                 continue
 
+            _sync_app_rules(session, child.id, new_snapshot)
+            await _enforce_always_blocked_apps(session, client, child, new_snapshot)
+
             latest = session.get(LatestSnapshot, child.id)
 
             if latest is None:
@@ -155,6 +240,7 @@ async def poll_once() -> None:
 
             changes = diff_snapshots(latest.data, new_snapshot)
             latest.data = new_snapshot
+            latest.updated_at = datetime.now(timezone.utc)
             session.add(latest)
 
             events = [
