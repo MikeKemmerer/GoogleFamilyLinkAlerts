@@ -108,13 +108,34 @@ def _iter_apps(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     return snapshot.get("apps_and_usage", {}).get("apps", []) or []
 
 
+def _is_preinstalled_system_app(app: dict[str, Any]) -> bool:
+    """Whether an app looks like OEM/carrier bloatware rather than something
+    a parent actually chose to install and then block.
+
+    Family Link hides a large number of pre-installed system components by
+    default (Samsung Knox internals, "Galaxy Finder", "Game Home", etc.) --
+    on real production data this was ~100 of 145 apps for one child, nearly
+    all of them junk with `installTimeMillis == "0"` (i.e. never actually
+    "installed" by anyone, just present since device setup). Excluding
+    those keeps the Settings page's "Blocked apps" list limited to apps a
+    parent would recognize and might want to enforce.
+    """
+    install_time = app.get("installTimeMillis")
+    try:
+        return int(install_time) == 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -> None:
     """Upsert an `AppRule` row for every app ever seen blocked for this child.
 
     Runs on every poll, independent of `always_blocked` -- this just builds
     the running "apps that have been blocked at least once" list the
     Settings page shows, so a parent can opt any of them into enforcement
-    later. Newly-discovered apps default to `always_blocked=False`.
+    later. Newly-discovered apps default to `always_blocked=False`. Skips
+    pre-installed system apps (see `_is_preinstalled_system_app`) so the
+    list stays limited to apps a parent would recognize.
     """
     for app in _iter_apps(snapshot):
         package_name = FamilyLinkApiClient.get_app_package_name(app)
@@ -122,6 +143,8 @@ def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -
             continue
         hidden = bool((app.get("supervisionSetting") or {}).get("hidden"))
         if not hidden:
+            continue
+        if _is_preinstalled_system_app(app):
             continue
         title = app.get("title") or package_name
         rule = session.get(AppRule, (child_id, package_name))

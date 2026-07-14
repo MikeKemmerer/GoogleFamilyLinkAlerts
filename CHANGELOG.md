@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Fix: the "Blocked apps" auto-discovery (see below) now skips pre-installed
+  OEM/carrier system apps (Samsung Knox internals, "Galaxy Finder", etc.),
+  identified by `installTimeMillis == 0`. On real production data this cut
+  one child's list from ~100 entries down to the handful actually worth a
+  parent's attention.
+- Fix: `get_app_package_name()` now checks the flat `packageName` field
+  first (confirmed live -- `apps_and_usage.apps[N].packageName`), falling
+  back to the `appId.androidAppPackageName` shape only if that's absent.
 - Added an opt-in "always blocked" app enforcement feature: the Settings
   page now lists every app ever seen blocked in Family Link, per child,
   in an expandable "Blocked apps" section. Checking "Always blocked" for

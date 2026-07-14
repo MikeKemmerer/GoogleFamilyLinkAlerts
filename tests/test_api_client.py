@@ -64,13 +64,15 @@ def test_parse_applied_time_limits_defaults_to_utc_when_no_tz_given(monkeypatch)
     assert result["bedtime_enabled_today"] is True
 
 
-def test_get_app_package_name_prefers_app_id_wrapper():
-    app = {"appId": {"androidAppPackageName": "com.tiktok.android"}, "packageName": "ignored"}
+def test_get_app_package_name_prefers_flat_packageName_field():
+    # Confirmed against live data: apps_and_usage.apps[N] uses a flat
+    # `packageName` string, not an `appId` wrapper.
+    app = {"packageName": "com.tiktok.android", "appId": {"androidAppPackageName": "ignored"}}
     assert FamilyLinkApiClient.get_app_package_name(app) == "com.tiktok.android"
 
 
-def test_get_app_package_name_falls_back_to_flat_key():
-    app = {"packageName": "com.tiktok.android"}
+def test_get_app_package_name_falls_back_to_app_id_wrapper():
+    app = {"appId": {"androidAppPackageName": "com.tiktok.android"}}
     assert FamilyLinkApiClient.get_app_package_name(app) == "com.tiktok.android"
 
 

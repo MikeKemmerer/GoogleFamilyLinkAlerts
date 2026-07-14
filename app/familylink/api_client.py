@@ -253,22 +253,20 @@ class FamilyLinkApiClient:
     def get_app_package_name(app: dict[str, Any]) -> str | None:
         """Extract an app's package name from a `apps_and_usage.apps[N]` entry.
 
-        Not documented anywhere -- inferred from the sibling
-        `appUsageSessions[*].appId.androidAppPackageName` shape (see
-        app/diff/engine.py's ignore patterns), since Google's app identifiers
-        appear to consistently use an `appId` oneof wrapper. Falls back to a
-        flat `packageName` key in case that assumption is wrong for this
-        response. If both are absent, callers should skip the app rather
-        than guess -- this is the one place enforcement correctness depends
-        on Google's exact field names, so keep it isolated here for easy
-        fixing if it turns out to be wrong on real data.
+        Confirmed against live production data (2026-07-14): each entry has
+        a flat `packageName` string field, e.g.
+        `apps_and_usage.apps[3].packageName == "com.google.android.youtube"`.
+        Also falls back to the sibling `appId.androidAppPackageName` shape
+        used by `appUsageSessions[*]` (see app/diff/engine.py's ignore
+        patterns), in case Google returns that shape here for some accounts.
         """
+        package_name = app.get("packageName")
+        if package_name:
+            return package_name
         app_id = app.get("appId")
         if isinstance(app_id, dict):
-            package = app_id.get("androidAppPackageName")
-            if package:
-                return package
-        return app.get("packageName")
+            return app_id.get("androidAppPackageName")
+        return None
 
     async def block_app(self, account_id: str, package_name: str) -> None:
         """Block a specific app for a child (opt-in "always blocked" enforcement only).

@@ -124,12 +124,14 @@ async def test_poll_once_discovers_blocked_app_into_app_rule(monkeypatch, db_ses
         "apps": [
             {
                 "title": "TikTok",
-                "appId": {"androidAppPackageName": "com.tiktok.android"},
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
                 "supervisionSetting": {"hidden": True},
             },
             {
                 "title": "Chrome",
-                "appId": {"androidAppPackageName": "com.android.chrome"},
+                "packageName": "com.android.chrome",
+                "installTimeMillis": "1756666561678",
                 "supervisionSetting": {"hidden": False},
             },
         ]
@@ -147,6 +149,37 @@ async def test_poll_once_discovers_blocked_app_into_app_rule(monkeypatch, db_ses
         assert rules[0].package_name == "com.tiktok.android"
         assert rules[0].title == "TikTok"
         assert rules[0].always_blocked is False
+
+
+async def test_poll_once_skips_preinstalled_system_apps_in_discovery(monkeypatch, db_session):
+    # installTimeMillis == "0" marks OEM/carrier bloatware Family Link
+    # hides by default -- these shouldn't clutter the Settings page list.
+    apps_and_usage = {
+        "apps": [
+            {
+                "title": "Samsung Knox internals",
+                "packageName": "com.samsung.android.knox.containeragent",
+                "installTimeMillis": "0",
+                "supervisionSetting": {"hidden": True},
+            },
+            {
+                "title": "TikTok",
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
+                "supervisionSetting": {"hidden": True},
+            },
+        ]
+    }
+    fake = FakeApiClient(apps_and_usage=apps_and_usage)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    from app.db.models import AppRule
+    from sqlmodel import select
+    with Session(db_session) as s:
+        rules = s.exec(select(AppRule)).all()
+        assert [r.package_name for r in rules] == ["com.tiktok.android"]
 
 
 async def test_poll_once_reblocks_always_blocked_app_found_enabled(monkeypatch, db_session):
