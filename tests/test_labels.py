@@ -1,6 +1,6 @@
 from zoneinfo import ZoneInfo
 
-from app.diff.labels import device_names_from_snapshot, humanize_field_path, humanize_value
+from app.diff.labels import app_titles_from_snapshot, device_names_from_snapshot, humanize_field_path, humanize_value
 
 
 def test_humanize_field_path_known_applied_time_limits_fields():
@@ -18,6 +18,19 @@ def test_humanize_field_path_falls_back_to_shortened_device_id_when_unresolved()
     label = humanize_field_path("applied_time_limits.devices.unknowndevice1234.used_minutes")
     assert label.startswith("Device unknownd")
     assert label.endswith(": screen time used")
+
+
+def test_humanize_field_path_app_blocked_field_resolves_title():
+    app_titles = {"com.tiktok.android": "TikTok"}
+    label = humanize_field_path(
+        "apps_and_usage.apps[com.tiktok.android].supervisionSetting.hidden", app_titles=app_titles
+    )
+    assert label == "TikTok: blocked"
+
+
+def test_humanize_field_path_app_blocked_field_falls_back_to_package_name_when_unresolved():
+    label = humanize_field_path("apps_and_usage.apps[com.unknown.app].supervisionSetting.hidden")
+    assert label == "com.unknown.app: blocked"
 
 
 def test_humanize_field_path_generic_fallback_for_unknown_paths():
@@ -74,3 +87,24 @@ def test_device_names_from_snapshot_builds_id_to_name_map():
 def test_device_names_from_snapshot_handles_missing_data():
     assert device_names_from_snapshot(None) == {}
     assert device_names_from_snapshot({}) == {}
+
+
+def test_app_titles_from_snapshot_builds_package_to_title_map():
+    snapshot = {
+        "apps_and_usage": {
+            "apps": [
+                {"packageName": "com.tiktok.android", "title": "TikTok"},
+                {"appId": {"androidAppPackageName": "com.epicgames.fortnite"}, "title": "Fortnite"},
+                {"packageName": "com.no.title.app"},
+            ]
+        }
+    }
+    assert app_titles_from_snapshot(snapshot) == {
+        "com.tiktok.android": "TikTok",
+        "com.epicgames.fortnite": "Fortnite",
+    }
+
+
+def test_app_titles_from_snapshot_handles_missing_data():
+    assert app_titles_from_snapshot(None) == {}
+    assert app_titles_from_snapshot({}) == {}

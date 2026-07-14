@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Fix: re-enabling an always-blocked app and having it auto re-blocked
+  within the same poll cycle used to produce **no history record at all**
+  and only an ephemeral ntfy push for the reblock -- enforcement patched
+  the just-fetched snapshot's `hidden` flag back to `True` *before*
+  diffing against the stored snapshot, so old and patched-new looked
+  identical and no ChangeEvent was ever created. Diffing now always runs
+  against the true fetched state first (so "someone re-enabled it" is
+  recorded/notified normally), and the re-block itself is now also
+  recorded as its own ChangeEvent with a dedicated notification, so both
+  are visible on the History page and both actually reach ntfy.
+- The app-blocked/unblocked field (`apps_and_usage.apps[N].supervisionSetting.hidden`)
+  now resolves to the app's actual name in History labels and ntfy
+  messages (e.g. "TikTok: blocked") instead of a bare positional array
+  index (e.g. "Apps #7 → Hidden"). The raw index is rewritten to the app's
+  stable package name at diff time, so labels stay correct even if
+  Family Link's app list reorders between polls.
 - History page: the field-path detail under each change is now hidden
   inside a collapsible `<details>` disclosure instead of always showing --
   expanding it also now shows the raw underlying old/new values (when they

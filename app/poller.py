@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import random
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -21,7 +22,7 @@ from .db import settings_store
 from .db.models import AppRule, ChangeEvent, Child, LatestSnapshot, PollFailure
 from .db.session import get_session
 from .diff.engine import diff_snapshots
-from .diff.labels import device_names_from_snapshot
+from .diff.labels import app_titles_from_snapshot, device_names_from_snapshot
 from .familylink.api_client import FamilyLinkApiClient
 from .familylink.auth_client import AuthClient
 from .familylink.exceptions import AuthenticationError, FamilyLinkError, NetworkError, SessionExpiredError
@@ -89,6 +90,7 @@ async def _maybe_notify_changes(
     child_name: str,
     events: list[ChangeEvent],
     device_names: dict[str, str] | None = None,
+    app_titles: dict[str, str] | None = None,
 ) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
@@ -96,7 +98,7 @@ async def _maybe_notify_changes(
     client = NtfyClient(*ntfy_config)
     for event in events:
         title, message = format_change_message(
-            child_name, event.field_path, event.old_value, event.new_value, device_names
+            child_name, event.field_path, event.old_value, event.new_value, device_names, app_titles
         )
         if await client.send(title, message, tags=["bell"]):
             event.notified = True
@@ -152,6 +154,36 @@ def _is_preinstalled_system_app(app: dict[str, Any], package_name: str) -> bool:
     return package_name.startswith(_SYSTEM_APP_PACKAGE_PREFIXES)
 
 
+_APPS_HIDDEN_INDEX_RE = re.compile(r"^apps_and_usage\.apps\[(?P<index>\d+)\]\.supervisionSetting\.hidden$")
+
+
+def _friendly_app_field_path(field_path: str, snapshot: dict[str, Any]) -> str:
+    """Rewrite a raw, positional `apps_and_usage.apps[N].supervisionSetting.hidden`
+    diff path to use the app's stable package name instead of its array
+    index, e.g. `apps_and_usage.apps[com.epicgames.fortnite].supervisionSetting.hidden`.
+
+    Family Link's app list can reorder between polls as apps are installed/
+    removed (see diff/engine.py's docstring on positional array paths), so a
+    bare numeric index isn't a reliable identifier across polls, and can't
+    be resolved to a friendly app name without looking it up again. `pkg` in
+    the rewritten path is looked up from `snapshot` -- the very same
+    snapshot the diff that produced `field_path` was computed against, so
+    the index-to-package mapping here is guaranteed correct for this event
+    (unlike a later lookup against some other/future snapshot).
+    """
+    match = _APPS_HIDDEN_INDEX_RE.match(field_path)
+    if not match:
+        return field_path
+    index = int(match.group("index"))
+    apps = _iter_apps(snapshot)
+    if index >= len(apps):
+        return field_path
+    package_name = FamilyLinkApiClient.get_app_package_name(apps[index])
+    if not package_name:
+        return field_path
+    return f"apps_and_usage.apps[{package_name}].supervisionSetting.hidden"
+
+
 def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -> None:
     """Upsert an `AppRule` row for every app ever seen blocked for this child.
 
@@ -188,12 +220,16 @@ async def _enforce_always_blocked_apps(
     """Immediately re-block any app a parent opted into "always blocked"
     if this poll's snapshot shows it currently enabled.
 
-    Runs every poll cycle, right after the fresh snapshot is fetched --
-    `snapshot` is mutated in place to reflect the re-block so the diff
-    below still reports the underlying "someone re-enabled it" change
-    (a parent likely wants to know that happened) while also correctly
-    showing it as blocked again by the end of this same cycle, rather than
-    only becoming visible on the next poll.
+    IMPORTANT: callers must diff/record `snapshot` against the previous
+    stored state *before* calling this -- it mutates `snapshot` in place to
+    reflect the re-block. If called before diffing, the "someone re-enabled
+    it" transition would never be visible (old and patched-new would look
+    identical), which is exactly the bug this ordering avoids -- see
+    app/poller.py:poll_once. The re-block itself is recorded as its own
+    ChangeEvent (and a dedicated high-priority notification) here, using the
+    same `apps[pkg].supervisionSetting.hidden` field path the organic diff
+    would use, so both the "re-enabled" and "re-blocked" events show up
+    under the same friendly label in the History page.
     """
     rules = session.exec(
         select(AppRule).where(AppRule.child_id == child.id, AppRule.always_blocked == True)  # noqa: E712
@@ -217,10 +253,19 @@ async def _enforce_always_blocked_apps(
             continue
         _LOGGER.info("Re-blocked %s for %s (always-blocked rule)", rule.title or rule.package_name, child.name)
         supervision["hidden"] = True
-        await _maybe_notify_enforcement(session, child.name, rule)
+        event = ChangeEvent(
+            child_id=child.id,
+            field_path=f"apps_and_usage.apps[{rule.package_name}].supervisionSetting.hidden",
+            old_value=False,
+            new_value=True,
+        )
+        session.add(event)
+        session.commit()
+        session.refresh(event)
+        await _maybe_notify_enforcement(session, child.name, rule, event)
 
 
-async def _maybe_notify_enforcement(session: Session, child_name: str, rule: AppRule) -> None:
+async def _maybe_notify_enforcement(session: Session, child_name: str, rule: AppRule, event: ChangeEvent) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
@@ -230,7 +275,10 @@ async def _maybe_notify_enforcement(session: Session, child_name: str, rule: App
         f"{rule.title or rule.package_name} was re-enabled but is set to always be "
         f"blocked -- blocked it again automatically."
     )
-    await client.send(title, message, priority="high", tags=["no_entry_sign"])
+    if await client.send(title, message, priority="high", tags=["no_entry_sign"]):
+        event.notified = True
+        session.add(event)
+        session.commit()
 
 
 async def poll_once() -> None:
@@ -266,7 +314,6 @@ async def poll_once() -> None:
                 continue
 
             _sync_app_rules(session, child.id, new_snapshot)
-            await _enforce_always_blocked_apps(session, client, child, new_snapshot)
 
             latest = session.get(LatestSnapshot, child.id)
 
@@ -278,6 +325,11 @@ async def poll_once() -> None:
                 # -- rather than reporting every field as a "change from
                 # None", which would flood ChangeEvent/ntfy with hundreds of
                 # entries all timestamped "now" (see README "First poll").
+                # Enforcement still runs here (there's no diff to protect,
+                # so patching the snapshot in place is harmless) so an
+                # always-blocked rule takes effect immediately even on a
+                # brand new child/reinstall rather than waiting a cycle.
+                await _enforce_always_blocked_apps(session, client, child, new_snapshot)
                 session.add(LatestSnapshot(child_id=child.id, data=new_snapshot))
                 session.commit()
                 _LOGGER.info(
@@ -286,15 +338,16 @@ async def poll_once() -> None:
                 )
                 continue
 
+            # Diff against the true, just-fetched state *before* enforcement
+            # (below) has a chance to patch it -- otherwise an app that got
+            # re-enabled and then immediately re-blocked within this same
+            # poll cycle would never show up as a change at all (the old
+            # stored value and the patched-new value would be identical).
             changes = diff_snapshots(latest.data, new_snapshot)
-            latest.data = new_snapshot
-            latest.updated_at = datetime.now(timezone.utc)
-            session.add(latest)
-
             events = [
                 ChangeEvent(
                     child_id=child.id,
-                    field_path=c.field_path,
+                    field_path=_friendly_app_field_path(c.field_path, new_snapshot),
                     old_value=c.old_value,
                     new_value=c.new_value,
                 )
@@ -305,10 +358,22 @@ async def poll_once() -> None:
             for e in events:
                 session.refresh(e)
 
+            app_titles = app_titles_from_snapshot(new_snapshot)
             if events:
                 _LOGGER.info("Detected %d change(s) for %s", len(events), child.name)
                 device_names = device_names_from_snapshot(new_snapshot)
-                await _maybe_notify_changes(session, child.name, events, device_names)
+                await _maybe_notify_changes(session, child.name, events, device_names, app_titles)
+
+            # Enforcement runs *after* diffing/notifying above so the
+            # underlying "someone re-enabled it" transition is preserved as
+            # its own recorded+notified event; it now patches `new_snapshot`
+            # and records/notifies a distinct "re-blocked" event of its own.
+            await _enforce_always_blocked_apps(session, client, child, new_snapshot)
+
+            latest.data = new_snapshot
+            latest.updated_at = datetime.now(timezone.utc)
+            session.add(latest)
+            session.commit()
 
 
 def _jittered_interval_seconds(minutes: int) -> float:

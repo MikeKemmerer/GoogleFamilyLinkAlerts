@@ -249,6 +249,134 @@ async def test_poll_once_reblocks_always_blocked_app_found_enabled(monkeypatch, 
         assert latest.data["apps_and_usage"]["apps"][0]["supervisionSetting"]["hidden"] is True
 
 
+async def test_poll_once_records_reenable_and_reblock_as_distinct_history_events(monkeypatch, db_session):
+    """Regression test: previously, enforcement patched the just-fetched
+    snapshot's `hidden` flag back to True *before* diffing against the
+    stored snapshot, so a re-enable-then-reblock happening within a single
+    poll cycle produced no ChangeEvent at all (old and patched-new looked
+    identical) -- only an ephemeral ntfy push for the reblock that vanished
+    if missed, with no record on the History page."""
+    from app.db.models import AppRule, ChangeEvent, LatestSnapshot
+    from sqlmodel import select
+
+    apps_and_usage_blocked = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
+                "supervisionSetting": {"hidden": True},
+            },
+        ]
+    }
+    fake1 = FakeApiClient(apps_and_usage=apps_and_usage_blocked)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()  # establishes baseline + discovers the AppRule
+
+    with Session(db_session) as s:
+        rule = s.get(AppRule, ("child1", "com.tiktok.android"))
+        rule.always_blocked = True
+        s.add(rule)
+        s.commit()
+
+    # Someone re-enables the app between polls.
+    apps_and_usage_enabled = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
+                "supervisionSetting": {"hidden": False},
+            },
+        ]
+    }
+    fake2 = FakeApiClient(apps_and_usage=apps_and_usage_enabled)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    assert fake2.blocked == [("child1", "com.tiktok.android")]
+
+    with Session(db_session) as s:
+        events = s.exec(select(ChangeEvent).order_by(ChangeEvent.id)).all()
+        hidden_field = "apps_and_usage.apps[com.tiktok.android].supervisionSetting.hidden"
+        hidden_events = [e for e in events if e.field_path == hidden_field]
+        # Both the organic "someone re-enabled it" transition and the
+        # enforcement's "blocked it again" transition must be recorded.
+        assert len(hidden_events) == 2
+        assert hidden_events[0].old_value is True and hidden_events[0].new_value is False
+        assert hidden_events[1].old_value is False and hidden_events[1].new_value is True
+
+        # And the poll ends with the stored snapshot correctly reflecting
+        # "blocked again" rather than the pre-enforcement enabled state.
+        latest = s.get(LatestSnapshot, "child1")
+        assert latest.data["apps_and_usage"]["apps"][0]["supervisionSetting"]["hidden"] is True
+
+
+async def test_poll_once_notifies_both_reenable_and_reblock_events(monkeypatch, db_session):
+    from app.db import settings_store
+    from app.db.models import AppRule, ChangeEvent
+    from sqlmodel import select
+
+    apps_and_usage_blocked = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
+                "supervisionSetting": {"hidden": True},
+            },
+        ]
+    }
+    fake1 = FakeApiClient(apps_and_usage=apps_and_usage_blocked)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()
+
+    with Session(db_session) as s:
+        rule = s.get(AppRule, ("child1", "com.tiktok.android"))
+        rule.always_blocked = True
+        s.add(rule)
+        settings_store.set_ntfy_config(s, "https://ntfy.sh", "topic")
+        settings_store.set_notifications_enabled(s, True)
+        s.commit()
+
+    sent = []
+
+    class FakeNtfy:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def send(self, *args, **kwargs):
+            sent.append((args, kwargs))
+            return True
+
+    monkeypatch.setattr(poller, "NtfyClient", FakeNtfy)
+
+    apps_and_usage_enabled = {
+        "apps": [
+            {
+                "title": "TikTok",
+                "packageName": "com.tiktok.android",
+                "installTimeMillis": "1756666561678",
+                "supervisionSetting": {"hidden": False},
+            },
+        ]
+    }
+    fake2 = FakeApiClient(apps_and_usage=apps_and_usage_enabled)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    # One notification for "TikTok was re-enabled" (the organic change),
+    # one for "TikTok was auto re-blocked" (the enforcement action).
+    assert len(sent) == 2
+    assert any("TikTok" in args[1] for args, _ in sent)  # message text
+
+    with Session(db_session) as s:
+        hidden_field = "apps_and_usage.apps[com.tiktok.android].supervisionSetting.hidden"
+        events = s.exec(select(ChangeEvent).where(ChangeEvent.field_path == hidden_field)).all()
+        assert len(events) == 2
+        assert all(e.notified for e in events)
+
+
 async def test_poll_once_skips_reblock_when_already_blocked(monkeypatch, db_session):
     from app.db.models import AppRule
 

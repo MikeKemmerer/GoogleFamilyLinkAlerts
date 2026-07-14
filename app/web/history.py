@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 
 from ..config import settings
-from ..db.models import Child, ChangeEvent, LatestSnapshot, PollFailure
-from ..diff.labels import device_names_from_snapshot, humanize_field_path, humanize_value
+from ..db.models import AppRule, Child, ChangeEvent, LatestSnapshot, PollFailure
+from ..diff.labels import app_titles_from_snapshot, device_names_from_snapshot, humanize_field_path, humanize_value
 from .deps import get_db, templates
 
 router = APIRouter()
@@ -50,9 +50,20 @@ async def history(request: Request, session: Session = Depends(get_db)):
     # child's latest snapshot, so labels below can say "Chromebook: bedtime
     # starts" instead of a raw device ID.
     device_names_by_child: dict[str, dict[str, str]] = {}
+    # Package names are stable but not human-friendly -- resolve to the
+    # app's title the same way, so an app-blocked/unblocked event says
+    # "Fortnite: blocked" instead of "com.epicgames.fortnite: blocked".
+    # Starts from AppRule (persists titles even after an app is
+    # uninstalled/no longer in the latest snapshot), then overlays the
+    # freshest titles from the current snapshot where available.
+    app_titles_by_child: dict[str, dict[str, str]] = {}
     for child in children:
         snapshot = session.get(LatestSnapshot, child.id)
         device_names_by_child[child.id] = device_names_from_snapshot(snapshot.data if snapshot else None)
+        rules = session.exec(select(AppRule).where(AppRule.child_id == child.id)).all()
+        titles = {rule.package_name: rule.title for rule in rules if rule.title}
+        titles.update(app_titles_from_snapshot(snapshot.data if snapshot else None))
+        app_titles_by_child[child.id] = titles
 
     rows = []
     for e in events:
@@ -64,7 +75,9 @@ async def history(request: Request, session: Session = Depends(get_db)):
             "detected_at": _to_local(e.detected_at),
             "child_name": child_names.get(e.child_id, e.child_id),
             "field_path": e.field_path,
-            "label": humanize_field_path(e.field_path, device_names_by_child.get(e.child_id, {})),
+            "label": humanize_field_path(
+                e.field_path, device_names_by_child.get(e.child_id, {}), app_titles_by_child.get(e.child_id, {})
+            ),
             "old_display": old_display,
             "new_display": new_display,
             # Only surface the raw underlying value in the expanded detail

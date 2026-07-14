@@ -53,10 +53,11 @@ def format_change_message(
     old_value,
     new_value,
     device_names: dict[str, str] | None = None,
+    app_titles: dict[str, str] | None = None,
 ) -> tuple[str, str]:
     """Build a human-readable (title, message) pair for a settings change."""
     title = f"Family Link change: {child_name}"
-    label = humanize_field_path(field_path, device_names)
+    label = humanize_field_path(field_path, device_names, app_titles)
     old_display = humanize_value(field_path, old_value, tz=settings.zone_info)
     new_display = humanize_value(field_path, new_value, tz=settings.zone_info)
     message = f"{label}\n{old_display} -> {new_display}"

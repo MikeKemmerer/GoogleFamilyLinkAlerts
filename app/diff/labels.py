@@ -61,6 +61,13 @@ _KNOWN_LABELS: list[tuple[re.Pattern, str]] = [
      "{device}: bonus time granted"),
     (re.compile(rf"^applied_time_limits\.devices\.{_DEVICE_ID_GROUP}\.bonus_override_id$"),
      "{device}: bonus time override id"),
+    # `apps_and_usage.apps[N].supervisionSetting.hidden` is what flips when
+    # an app gets blocked/unblocked (manually, or via the always-blocked
+    # enforcement in app/poller.py). poller.py rewrites the raw positional
+    # `[N]` index to the app's stable package name (`[pkg]`) before storing
+    # the ChangeEvent -- see app/poller.py:_friendly_app_field_path -- so
+    # this resolves cleanly here via `app_titles` instead of a bare index.
+    (re.compile(r"^apps_and_usage\.apps\[(?P<pkg>[^\]]+)\]\.supervisionSetting\.hidden$"), "{app}: blocked"),
 ]
 
 # Field-path suffixes that hold millisecond-epoch timestamps.
@@ -86,18 +93,25 @@ def _generic_label(field_path: str) -> str:
     return " → ".join(_humanize_segment(part) for part in field_path.split("."))
 
 
-def humanize_field_path(field_path: str, device_names: dict[str, str] | None = None) -> str:
+def humanize_field_path(
+    field_path: str,
+    device_names: dict[str, str] | None = None,
+    app_titles: dict[str, str] | None = None,
+) -> str:
     """Best-effort human-readable label for a raw diff field path."""
     device_names = device_names or {}
+    app_titles = app_titles or {}
     for pattern, template in _KNOWN_LABELS:
         match = pattern.match(field_path)
         if match:
-            device_id = match.groupdict().get("device_id")
+            groups = match.groupdict()
+            device_id = groups.pop("device_id", None)
             if device_id:
-                device = device_names.get(device_id, f"Device {device_id[:8]}…")
-            else:
-                device = ""
-            return template.format(device=device)
+                groups["device"] = device_names.get(device_id, f"Device {device_id[:8]}…")
+            pkg = groups.pop("pkg", None)
+            if pkg:
+                groups["app"] = app_titles.get(pkg, pkg)
+            return template.format(**groups)
     return _generic_label(field_path)
 
 
@@ -151,3 +165,22 @@ def device_names_from_snapshot(snapshot_data: dict[str, Any] | None) -> dict[str
         if device_id and friendly_name:
             names[device_id] = friendly_name
     return names
+
+
+def app_titles_from_snapshot(snapshot_data: dict[str, Any] | None) -> dict[str, str]:
+    """Build a {package_name: title} map from a stored snapshot's
+    `apps_and_usage.apps` list, for resolving the app-blocked/unblocked
+    label to an actual app name instead of a bare package name. Not
+    imported from app.familylink.api_client to keep this module dependency
+    -free -- duplicates its tiny flat-field-with-fallback lookup instead.
+    """
+    titles: dict[str, str] = {}
+    if not snapshot_data:
+        return titles
+    for app in snapshot_data.get("apps_and_usage", {}).get("apps", []) or []:
+        package_name = app.get("packageName") or (app.get("appId") or {}).get("androidAppPackageName")
+        title = app.get("title")
+        if package_name and title:
+            titles[package_name] = title
+    return titles
+
