@@ -7,6 +7,7 @@
   <style>
     body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; max-width: 780px;
            margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; }
+    body.wide { max-width: 960px; }
     h1 { font-size: 1.4rem; }
     nav { margin-bottom: 1.5rem; }
     nav a { margin-right: 1rem; text-decoration: none; color: #2c5aa0; }
@@ -24,13 +25,18 @@
     button:hover, .btn:hover { background: #1e3f73; }
     table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
     th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
+    .changes-table { table-layout: fixed; }
+    .changes-table td, .changes-table th { overflow-wrap: anywhere; word-break: break-word; }
+    .changes-table summary { cursor: pointer; }
+    .row-detail { margin-top: 0.4rem; }
     .muted { color: #777; font-size: 0.9rem; }
     .hint { color: #777; font-size: 0.85rem; margin-top: 0.4rem; }
-    .field-path { color: #999; font-size: 0.75rem; font-family: Consolas, monospace; margin-top: 0.15rem; }
+    .field-path { color: #999; font-size: 0.75rem; font-family: Consolas, monospace; margin-top: 0.15rem;
+                  overflow-wrap: anywhere; word-break: break-word; }
     .flash { background: #fff3cd; border: 1px solid #ffe69c; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
   </style>
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   {% if setup_completed %}
   <nav>
     <a href="/">Status</a>

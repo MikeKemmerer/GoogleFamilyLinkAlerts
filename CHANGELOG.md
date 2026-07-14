@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- History page: the field-path detail under each change is now hidden
+  inside a collapsible `<details>` disclosure instead of always showing --
+  expanding it also now shows the raw underlying old/new values (when they
+  differ from the humanized display) and whether a ntfy alert was sent for
+  that change.
+- History page: the changes table now wraps long text within its columns
+  instead of overflowing horizontally, and the page itself is slightly
+  wider (960px vs. the default 780px) so the table has more room.
+- Minute-duration fields (screen time used/remaining/allowed, daily limit,
+  bonus time) are now rendered as "1h 15m" instead of a bare number of
+  minutes.
 - Fix: the "Blocked apps" auto-discovery also now excludes OEM/carrier
   system apps by known package-name prefix (`com.samsung.`, `com.sec.`,
   `com.tmobile.`, etc.), since some of them (e.g. Samsung's "Reminder",

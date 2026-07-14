@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}History — Family Link Alerts{% endblock %}
+{% block body_class %}wide{% endblock %}
 {% block content %}
 <h1>Change history</h1>
 
@@ -22,14 +23,35 @@
   {% if not rows %}
     <p class="muted">No changes detected yet.</p>
   {% else %}
-  <table>
+  <table class="changes-table">
+    <colgroup>
+      <col style="width: 13%">
+      <col style="width: 12%">
+      <col style="width: 40%">
+      <col style="width: 17.5%">
+      <col style="width: 17.5%">
+    </colgroup>
     <thead><tr><th>When</th><th>Child</th><th>Change</th><th>Old</th><th>New</th></tr></thead>
     <tbody>
     {% for row in rows %}
       <tr>
         <td>{{ row.detected_at }}</td>
         <td>{{ row.child_name }}</td>
-        <td>{{ row.label }}<div class="field-path">{{ row.field_path }}</div></td>
+        <td>
+          <details>
+            <summary>{{ row.label }}</summary>
+            <div class="row-detail">
+              <div class="field-path">{{ row.field_path }}</div>
+              {% if row.old_raw is not none %}
+                <div>Raw old value: <span class="field-path">{{ row.old_raw }}</span></div>
+              {% endif %}
+              {% if row.new_raw is not none %}
+                <div>Raw new value: <span class="field-path">{{ row.new_raw }}</span></div>
+              {% endif %}
+              <div>Alert sent: {{ "Yes" if row.notified else "No" }}</div>
+            </div>
+          </details>
+        </td>
         <td>{{ row.old_display }}</td>
         <td>{{ row.new_display }}</td>
       </tr>
@@ -39,3 +61,4 @@
   {% endif %}
 </div>
 {% endblock %}
+

@@ -1,7 +1,9 @@
 """Change history / polling issue timeline."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
@@ -24,6 +26,18 @@ def _to_local(dt: datetime) -> datetime:
     return aware.astimezone(settings.zone_info)
 
 
+def _raw_display(value: Any) -> str:
+    """Unformatted rendering of an old/new value, shown only when a row is
+    expanded -- lets a parent see the exact underlying value (e.g. the raw
+    millisecond epoch or minute count) behind a humanized display like a
+    local date/time or "1h 15m", without cluttering the collapsed row."""
+    if value is None:
+        return "—"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, default=str)
+    return str(value)
+
+
 @router.get("/history")
 async def history(request: Request, session: Session = Depends(get_db)):
     events = session.exec(select(ChangeEvent).order_by(ChangeEvent.detected_at.desc()).limit(200)).all()
@@ -40,17 +54,29 @@ async def history(request: Request, session: Session = Depends(get_db)):
         snapshot = session.get(LatestSnapshot, child.id)
         device_names_by_child[child.id] = device_names_from_snapshot(snapshot.data if snapshot else None)
 
-    rows = [
-        {
+    rows = []
+    for e in events:
+        old_display = humanize_value(e.field_path, e.old_value, tz=settings.zone_info)
+        new_display = humanize_value(e.field_path, e.new_value, tz=settings.zone_info)
+        old_raw = _raw_display(e.old_value)
+        new_raw = _raw_display(e.new_value)
+        rows.append({
             "detected_at": _to_local(e.detected_at),
             "child_name": child_names.get(e.child_id, e.child_id),
             "field_path": e.field_path,
             "label": humanize_field_path(e.field_path, device_names_by_child.get(e.child_id, {})),
-            "old_display": humanize_value(e.field_path, e.old_value, tz=settings.zone_info),
-            "new_display": humanize_value(e.field_path, e.new_value, tz=settings.zone_info),
-        }
-        for e in events
-    ]
+            "old_display": old_display,
+            "new_display": new_display,
+            # Only surface the raw underlying value in the expanded detail
+            # when it actually differs from the humanized display (e.g. a
+            # raw ms epoch behind a formatted date, or a raw minute count
+            # behind "1h 15m") -- otherwise it'd just repeat what's already
+            # shown in the Old/New columns.
+            "old_raw": old_raw if old_raw != old_display else None,
+            "new_raw": new_raw if new_raw != new_display else None,
+            "notified": e.notified,
+        })
+
 
     failure_rows = [
         {"occurred_at": _to_local(f.occurred_at), "kind": f.kind, "message": f.message}

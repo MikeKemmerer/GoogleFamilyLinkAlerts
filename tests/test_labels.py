@@ -36,7 +36,15 @@ def test_humanize_value_formats_none_bool_and_ms_timestamps():
 
 
 def test_humanize_value_passthrough_for_plain_values():
-    assert humanize_value("applied_time_limits.devices.dev1.remaining_minutes", 60) == "60"
+    assert humanize_value("applied_time_limits.devices.dev1.some_flag_count", 60) == "60"
+
+
+def test_humanize_value_formats_minute_durations_as_hours_and_minutes():
+    assert humanize_value("applied_time_limits.devices.dev1.used_minutes", 75) == "1h 15m"
+    assert humanize_value("applied_time_limits.devices.dev1.remaining_minutes", 45) == "45m"
+    assert humanize_value("applied_time_limits.devices.dev1.total_allowed_minutes", 120) == "2h"
+    assert humanize_value("applied_time_limits.devices.dev1.remaining_minutes", 0) == "0m"
+    assert humanize_value("apps_and_usage.apps[3].supervisionSetting.usageLimit.dailyUsageLimitMins", 90) == "1h 30m"
 
 
 def test_humanize_value_renders_ms_timestamp_in_given_timezone_not_system_time():

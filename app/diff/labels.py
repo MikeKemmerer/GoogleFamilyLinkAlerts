@@ -14,9 +14,11 @@ turns what's *left* into something a parent can actually read:
   into friendly keys yet) falls back to a generic humanizer that turns the
   raw dotted/bracketed path into "Title Case → Title Case" segments --
   still not a full translation, but far more readable than the raw path.
-- Values are rendered too: None -> "—", booleans -> Yes/No, and known
+- Values are rendered too: None -> "—", booleans -> Yes/No, known
   millisecond-epoch timestamp fields (anything ending in `_ms` or
-  `Millis`) -> a local date/time string instead of a raw big number.
+  `Millis`) -> a local date/time string instead of a raw big number, and
+  known minute-duration fields (anything ending in `_minutes` or `Mins`)
+  -> "1h 15m" instead of a bare "75".
 """
 from __future__ import annotations
 
@@ -64,6 +66,10 @@ _KNOWN_LABELS: list[tuple[re.Pattern, str]] = [
 # Field-path suffixes that hold millisecond-epoch timestamps.
 _MS_TIMESTAMP_SUFFIXES = ("_ms", "Millis")
 
+# Field-path suffixes that hold a duration in minutes (e.g. screen time
+# used/remaining/allowed) -- rendered as "1h 15m" instead of a bare "75".
+_MINUTE_SUFFIXES = ("_minutes", "Mins")
+
 _CAMEL_RE = re.compile(r"(?<!^)(?=[A-Z])")
 _INDEX_RE = re.compile(r"\[(\d+)\]")
 
@@ -95,6 +101,18 @@ def humanize_field_path(field_path: str, device_names: dict[str, str] | None = N
     return _generic_label(field_path)
 
 
+def _format_minutes(value: int | float) -> str:
+    """`75` -> `"1h 15m"`, `45` -> `"45m"`, `120` -> `"2h"`, `0` -> `"0m"`."""
+    total = int(value)
+    sign = "-" if total < 0 else ""
+    hours, minutes = divmod(abs(total), 60)
+    if hours and minutes:
+        return f"{sign}{hours}h {minutes}m"
+    if hours:
+        return f"{sign}{hours}h"
+    return f"{sign}{minutes}m"
+
+
 def humanize_value(field_path: str, value: Any, tz: Any = None) -> str:
     """Best-effort human-readable rendering of a diffed old/new value.
 
@@ -116,6 +134,8 @@ def humanize_value(field_path: str, value: Any, tz: Any = None) -> str:
             return dt.strftime("%Y-%m-%d %H:%M")
         except (ValueError, OSError, OverflowError):
             return str(value)
+    if isinstance(value, (int, float)) and any(field_path.endswith(suffix) for suffix in _MINUTE_SUFFIXES):
+        return _format_minutes(value)
     return str(value)
 
 
