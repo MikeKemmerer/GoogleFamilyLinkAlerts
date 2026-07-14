@@ -27,7 +27,7 @@
     <tbody>
     {% for c in children %}
       <tr>
-        <td>{{ c.name }}</td>
+        <td>{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }}</td>
         <td>{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
         <td>
           <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
@@ -50,7 +50,7 @@
                 <tbody>
                 {% for r in rules %}
                   <tr>
-                    <td>{{ r.title }}</td>
+                    <td>{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
                     <td>{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
                     <td>
                       <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
@@ -97,4 +97,9 @@
     <button type="submit">Save</button>
   </form>
 </div>
+
+<p class="muted">
+  Family Link Alerts v{{ app_version }} ·
+  <a href="https://github.com/MikeKemmerer/GoogleFamilyLinkAlerts/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+</p>
 {% endblock %}

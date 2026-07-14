@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Settings page now shows the running app version (and a link to this
+  changelog) in the footer, so it's easy to confirm what's actually
+  deployed.
+- Status and History pages now show the time of the last successful poll
+  (per-child on History, most-recent-across-all-children on Status), so
+  it's easy to spot a stalled poller without digging into logs.
+- Child avatars and per-app icons (both sourced from Family Link's own
+  data -- `profile.profileImageUrl` for family members, `iconUrl` for each
+  app) are now displayed next to child names and app titles across the
+  Settings and History pages. A lightweight per-poll refresh keeps a
+  child's avatar in sync with their current Google profile photo,
+  including self-healing it for children set up before this field
+  existed.
+- Status page: added a new "Screen time today" section showing, per
+  child, total minutes used across all their devices today plus a
+  per-device breakdown (used/remaining/daily limit/bonus time, and
+  bedtime/school-time/locked badges). Devices with no usage yet today are
+  collapsed by default; devices already in use today are expanded.
 - Fix: re-enabling an always-blocked app and having it auto re-blocked
   within the same poll cycle used to produce **no history record at all**
   and only an ephemeral ntfy push for the reblock -- enforcement patched

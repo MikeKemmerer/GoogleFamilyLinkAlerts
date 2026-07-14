@@ -231,9 +231,11 @@ class FamilyLinkApiClient:
         for member in data.get("members", []):
             info = member.get("memberSupervisionInfo")
             if info and info.get("isSupervisedMember"):
+                profile = member.get("profile", {})
                 children.append({
                     "id": member["userId"],
-                    "name": member.get("profile", {}).get("displayName", "Unknown"),
+                    "name": profile.get("displayName", "Unknown"),
+                    "avatar_url": profile.get("profileImageUrl"),
                 })
         if not children:
             raise ValueError("No supervised children found in this Family Link family")

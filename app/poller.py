@@ -204,13 +204,42 @@ def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -
         if _is_preinstalled_system_app(app, package_name):
             continue
         title = app.get("title") or package_name
+        icon_url = app.get("iconUrl")
         rule = session.get(AppRule, (child_id, package_name))
         if rule is None:
-            session.add(AppRule(child_id=child_id, package_name=package_name, title=title))
-        elif rule.title != title:
+            session.add(AppRule(child_id=child_id, package_name=package_name, title=title, icon_url=icon_url))
+        elif rule.title != title or rule.icon_url != icon_url:
             rule.title = title
+            rule.icon_url = icon_url
             rule.updated_at = datetime.now(timezone.utc)
             session.add(rule)
+    session.commit()
+
+
+async def _refresh_child_avatars(session: Session, client: FamilyLinkApiClient, children: list[Child]) -> None:
+    """Keep each child's `avatar_url` in sync with their current Google
+    profile photo.
+
+    Runs once per poll cycle (not per child) since it's a single family-wide
+    API call. Also self-heals `avatar_url` for children created before this
+    field existed (it starts out `None` for any pre-existing row). Failures
+    here are non-fatal -- a stale/missing avatar shouldn't abort polling.
+    """
+    try:
+        members = await client.get_family_members()
+    except (NetworkError, FamilyLinkError) as err:
+        _LOGGER.warning("Failed to refresh child avatars: %s", err)
+        return
+    avatar_by_id = {
+        m["userId"]: (m.get("profile") or {}).get("profileImageUrl")
+        for m in members.get("members", [])
+        if m.get("userId")
+    }
+    for child in children:
+        avatar_url = avatar_by_id.get(child.id)
+        if avatar_url and avatar_url != child.avatar_url:
+            child.avatar_url = avatar_url
+            session.add(child)
     session.commit()
 
 
@@ -300,6 +329,8 @@ async def poll_once() -> None:
             failure = _record_failure(session, "network_error", str(err))
             await _maybe_notify_failure(session, failure)
             return
+
+        await _refresh_child_avatars(session, client, children)
 
         for child in children:
             try:

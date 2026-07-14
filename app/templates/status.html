@@ -15,6 +15,10 @@
     {% if has_cookies %}<span class="badge badge-ok">logged in</span>{% else %}<span class="badge badge-bad">not logged in</span>{% endif %}
   </p>
   <p class="muted">Monitoring {{ children_count }} child(ren), polling every ~{{ poll_interval_minutes }} minutes.</p>
+  <p class="muted">
+    Last successful poll:
+    {% if last_poll_at %}{{ last_poll_at }}{% else %}never yet{% endif %}
+  </p>
   {% if not has_cookies %}
     <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
        &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a> to re-authenticate.</p>
@@ -23,6 +27,38 @@
     <button type="submit">Poll now</button>
   </form>
 </div>
+
+{% if device_summaries %}
+<div class="card">
+  <h2>Screen time today</h2>
+  {% for summary in device_summaries %}
+    <div style="margin-bottom: 1rem;">
+      <p style="margin: 0 0 0.3rem;">
+        {% if summary.child.avatar_url %}<img class="avatar-md" src="{{ summary.child.avatar_url }}" alt="">{% endif %}
+        <strong>{{ summary.child.name }}</strong> — {{ summary.total_used_display }} used today
+      </p>
+      {% if not summary.devices %}
+        <p class="muted hint">No device data yet.</p>
+      {% endif %}
+      {% for device in summary.devices %}
+        <details {% if device.used_today %}open{% endif %} style="margin-left: 1.5rem;">
+          <summary>
+            {{ device.name }} — {{ device.used_display }} used
+            {% if device.locked %}<span class="badge badge-bad">locked</span>{% endif %}
+            {% if device.bedtime_active %}<span class="badge">bedtime</span>{% endif %}
+            {% if device.schooltime_active %}<span class="badge">school time</span>{% endif %}
+          </summary>
+          <div class="row-detail hint">
+            {% if device.daily_limit_display %}Daily limit: {{ device.daily_limit_display }} · {% endif %}
+            {% if device.remaining_display %}Remaining: {{ device.remaining_display }} · {% endif %}
+            {% if device.bonus_display %}Bonus time: {{ device.bonus_display }}{% endif %}
+          </div>
+        </details>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="card">
   <h2>Recent activity</h2>

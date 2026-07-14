@@ -70,9 +70,14 @@ async def setup_children(request: Request, session: Session = Depends(get_db)):
     form = await request.form()
     ids = form.getlist("child_ids")
     names = form.getlist("child_names")
-    for child_id, name in zip(ids, names):
+    avatar_urls = form.getlist("child_avatar_urls")
+    # avatar_urls may be missing entirely on older/manual form submissions --
+    # pad it out rather than using zip(), which would silently truncate the
+    # whole loop to zero children if the lists are shorter.
+    avatar_urls += [None] * (len(ids) - len(avatar_urls))
+    for child_id, name, avatar_url in zip(ids, names, avatar_urls):
         enabled = form.get(f"enabled_{child_id}") is not None
-        session.add(Child(id=child_id, name=name, enabled=enabled))
+        session.add(Child(id=child_id, name=name, avatar_url=avatar_url or None, enabled=enabled))
     session.commit()
     return RedirectResponse("/setup", status_code=303)
 

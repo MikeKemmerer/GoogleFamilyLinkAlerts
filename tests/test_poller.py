@@ -40,6 +40,11 @@ class FakeApiClient:
             raise self._raise_on_block
         self.blocked.append((child_id, package_name))
 
+    async def get_family_members(self):
+        # Avatar refresh is a best-effort, once-per-cycle side effect;
+        # returning no members means _refresh_child_avatars is a no-op.
+        return {"members": []}
+
 
 @pytest.fixture
 def db_session(monkeypatch, tmp_path):

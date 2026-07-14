@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
 
+from .. import __version__
 from ..config import settings
 from ..db import settings_store
 from ..db.models import AppRule, Child, LatestSnapshot
@@ -41,6 +42,7 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "ntfy_topic": ntfy_config[1] if ntfy_config else "",
         "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
         "notifications_enabled": settings_store.get_notifications_enabled(session),
+        "app_version": __version__,
     })
 
 

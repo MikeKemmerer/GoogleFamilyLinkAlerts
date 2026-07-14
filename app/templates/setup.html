@@ -42,6 +42,7 @@
             <td>{{ c.name }}
               <input type="hidden" name="child_ids" value="{{ c.id }}">
               <input type="hidden" name="child_names" value="{{ c.name }}">
+              <input type="hidden" name="child_avatar_urls" value="{{ c.avatar_url or '' }}">
             </td>
           </tr>
         {% endfor %}

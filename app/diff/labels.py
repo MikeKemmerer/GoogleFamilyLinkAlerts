@@ -115,7 +115,7 @@ def humanize_field_path(
     return _generic_label(field_path)
 
 
-def _format_minutes(value: int | float) -> str:
+def format_minutes(value: int | float) -> str:
     """`75` -> `"1h 15m"`, `45` -> `"45m"`, `120` -> `"2h"`, `0` -> `"0m"`."""
     total = int(value)
     sign = "-" if total < 0 else ""
@@ -149,7 +149,7 @@ def humanize_value(field_path: str, value: Any, tz: Any = None) -> str:
         except (ValueError, OSError, OverflowError):
             return str(value)
     if isinstance(value, (int, float)) and any(field_path.endswith(suffix) for suffix in _MINUTE_SUFFIXES):
-        return _format_minutes(value)
+        return format_minutes(value)
     return str(value)
 
 
@@ -183,4 +183,18 @@ def app_titles_from_snapshot(snapshot_data: dict[str, Any] | None) -> dict[str, 
         if package_name and title:
             titles[package_name] = title
     return titles
+
+
+def app_icons_from_snapshot(snapshot_data: dict[str, Any] | None) -> dict[str, str]:
+    """Build a {package_name: icon_url} map from a stored snapshot's
+    `apps_and_usage.apps` list, mirroring `app_titles_from_snapshot`."""
+    icons: dict[str, str] = {}
+    if not snapshot_data:
+        return icons
+    for app in snapshot_data.get("apps_and_usage", {}).get("apps", []) or []:
+        package_name = app.get("packageName") or (app.get("appId") or {}).get("androidAppPackageName")
+        icon_url = app.get("iconUrl")
+        if package_name and icon_url:
+            icons[package_name] = icon_url
+    return icons
 

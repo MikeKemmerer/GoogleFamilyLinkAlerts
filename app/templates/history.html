@@ -4,6 +4,15 @@
 {% block content %}
 <h1>Change history</h1>
 
+{% if child_names %}
+<p class="muted">
+  Last successful poll —
+  {% for cid, cname in child_names.items() %}
+    {% if child_avatars.get(cid) %}<img class="avatar-sm" src="{{ child_avatars.get(cid) }}" alt="">{% endif %}{{ cname }}: {% if last_poll_by_child.get(cid) %}{{ last_poll_by_child.get(cid) }}{% else %}never yet{% endif %}{% if not loop.last %} &middot; {% endif %}
+  {% endfor %}
+</p>
+{% endif %}
+
 {% if failures %}
 <div class="card">
   <h2>Recent polling issues</h2>
@@ -36,10 +45,10 @@
     {% for row in rows %}
       <tr>
         <td>{{ row.detected_at }}</td>
-        <td>{{ row.child_name }}</td>
+        <td>{% if row.child_avatar_url %}<img class="avatar-sm" src="{{ row.child_avatar_url }}" alt="">{% endif %}{{ row.child_name }}</td>
         <td>
           <details>
-            <summary>{{ row.label }}</summary>
+            <summary>{% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}</summary>
             <div class="row-detail">
               <div class="field-path">{{ row.field_path }}</div>
               {% if row.old_raw is not none %}

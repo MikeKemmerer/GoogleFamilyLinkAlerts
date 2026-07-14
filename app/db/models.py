@@ -26,6 +26,7 @@ class Child(SQLModel, table=True):
 
     id: str = Field(primary_key=True, description="Google account/user ID of the child")
     name: str
+    avatar_url: str | None = Field(default=None, description="Google profile photo URL (from families/mine/members)")
     enabled: bool = Field(default=True, description="Whether polling is active for this child")
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -86,6 +87,7 @@ class AppRule(SQLModel, table=True):
     child_id: str = Field(primary_key=True, foreign_key="child.id")
     package_name: str = Field(primary_key=True)
     title: str
+    icon_url: str | None = Field(default=None, description="App icon URL, from apps_and_usage.apps[].iconUrl")
     always_blocked: bool = Field(default=False)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
