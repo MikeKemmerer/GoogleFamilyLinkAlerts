@@ -1,3 +1,5 @@
+from zoneinfo import ZoneInfo
+
 from app.diff.labels import device_names_from_snapshot, humanize_field_path, humanize_value
 
 
@@ -35,6 +37,18 @@ def test_humanize_value_formats_none_bool_and_ms_timestamps():
 
 def test_humanize_value_passthrough_for_plain_values():
     assert humanize_value("applied_time_limits.devices.dev1.remaining_minutes", 60) == "60"
+
+
+def test_humanize_value_renders_ms_timestamp_in_given_timezone_not_system_time():
+    # 1700000000000 ms == 2023-11-14 22:13:20 UTC. Rendered in New York
+    # (UTC-5 in November) it should show the *local* clock time, not the
+    # UTC one -- this is what makes bedtime start/end times on the History
+    # page match what's actually configured in Family Link.
+    field = "applied_time_limits.devices.dev1.bedtime_window.start_ms"
+    utc_rendered = humanize_value(field, 1700000000000, tz=ZoneInfo("UTC"))
+    ny_rendered = humanize_value(field, 1700000000000, tz=ZoneInfo("America/New_York"))
+    assert utc_rendered == "2023-11-14 22:13"
+    assert ny_rendered == "2023-11-14 17:13"
 
 
 def test_device_names_from_snapshot_builds_id_to_name_map():

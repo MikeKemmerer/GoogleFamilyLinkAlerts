@@ -21,7 +21,7 @@ turns what's *left* into something a parent can actually read:
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 _DEVICE_ID_GROUP = r"(?P<device_id>[A-Za-z0-9_-]+)"
@@ -95,15 +95,25 @@ def humanize_field_path(field_path: str, device_names: dict[str, str] | None = N
     return _generic_label(field_path)
 
 
-def humanize_value(field_path: str, value: Any) -> str:
-    """Best-effort human-readable rendering of a diffed old/new value."""
+def humanize_value(field_path: str, value: Any, tz: Any = None) -> str:
+    """Best-effort human-readable rendering of a diffed old/new value.
+
+    `tz` (a `datetime.tzinfo`, e.g. `app.config.settings.zone_info`) is used
+    to render millisecond-epoch timestamp fields in the family's local time
+    rather than the container's system time (which is UTC in production) --
+    otherwise displayed bedtime/school-time clock times are off by the UTC
+    offset from what's actually configured in Family Link.
+    """
     if value is None:
         return "—"
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, (int, float)) and any(field_path.endswith(suffix) for suffix in _MS_TIMESTAMP_SUFFIXES):
         try:
-            return datetime.fromtimestamp(value / 1000).strftime("%Y-%m-%d %H:%M")
+            dt = datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+            if tz is not None:
+                dt = dt.astimezone(tz)
+            return dt.strftime("%Y-%m-%d %H:%M")
         except (ValueError, OSError, OverflowError):
             return str(value)
     return str(value)

@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 os.environ.setdefault("APP_DATA_DIR", str(Path(__file__).parent / "_tmp_data"))
 
@@ -21,3 +22,18 @@ def test_settings_env_override(monkeypatch, tmp_path):
     s = Settings()
     assert s.app_port == 9090
     assert s.familylink_auth_api_key == "secret123"
+
+
+def test_settings_timezone_defaults_to_utc():
+    s = Settings(timezone="UTC")
+    assert s.zone_info == ZoneInfo("UTC")
+
+
+def test_settings_timezone_resolves_valid_iana_name():
+    s = Settings(timezone="America/New_York")
+    assert s.zone_info == ZoneInfo("America/New_York")
+
+
+def test_settings_timezone_falls_back_to_utc_for_invalid_name():
+    s = Settings(timezone="Not/A_Real_Zone")
+    assert s.zone_info == ZoneInfo("UTC")

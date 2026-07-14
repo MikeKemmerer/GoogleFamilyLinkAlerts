@@ -186,6 +186,7 @@ reversed, so prefer rolling back promptly if you hit a bad release.
 | `APP_IMAGE_TAG` | `latest` | Our app's image tag — pin to a specific `vX.Y.Z` release for reproducibility. |
 | `APP_DATA_DIR` | `/data` | In-container path where the SQLite DB lives (bind-mounted to `./data/app`). |
 | `APP_PORT` / `APP_HOST_PORT` | `8080` | In-container / published host port for the web UI. |
+| `TIMEZONE` | `America/New_York` | Your family's IANA timezone (shared with `familylink-auth`). Family Link's bedtime/school-time schedules are in local time, so this must be set correctly for "active right now"/"enabled today" and displayed bedtime/school-time clock times to be accurate. |
 
 Everything else (children to monitor, ntfy target, poll interval) is
 configured through the web UI, not `.env` — see the setup wizard above.

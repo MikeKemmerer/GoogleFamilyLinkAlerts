@@ -11,6 +11,7 @@ import logging
 
 import httpx
 
+from ..config import settings
 from ..diff.labels import humanize_field_path, humanize_value
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,8 +57,8 @@ def format_change_message(
     """Build a human-readable (title, message) pair for a settings change."""
     title = f"Family Link change: {child_name}"
     label = humanize_field_path(field_path, device_names)
-    old_display = humanize_value(field_path, old_value)
-    new_display = humanize_value(field_path, new_value)
+    old_display = humanize_value(field_path, old_value, tz=settings.zone_info)
+    new_display = humanize_value(field_path, new_value, tz=settings.zone_info)
     message = f"{label}\n{old_display} -> {new_display}"
     return title, message
 

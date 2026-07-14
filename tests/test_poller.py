@@ -30,7 +30,7 @@ class FakeApiClient:
     async def get_time_limit(self, child_id):
         return self._time_limit
 
-    async def get_applied_time_limits(self, child_id):
+    async def get_applied_time_limits(self, child_id, tz=None):
         return self._applied_time_limits
 
 

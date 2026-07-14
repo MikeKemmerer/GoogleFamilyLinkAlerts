@@ -8,9 +8,13 @@ here.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -43,6 +47,16 @@ class Settings(BaseSettings):
     # Our app
     app_data_dir: Path = Path("/data")
     app_port: int = 8080
+    # Family's local IANA timezone (e.g. "America/New_York"). Google Family
+    # Link's bedtime/school-time schedules are configured by weekday and
+    # time-of-day in the family's local time, not UTC -- so this must match
+    # the same TIMEZONE the familylink-auth container uses (see
+    # docker-compose.yml), otherwise "today"/"active right now" can be
+    # computed against the wrong day, especially in the evening when UTC's
+    # calendar date has already rolled over but it isn't midnight locally
+    # yet. Defaults to UTC (safe but only correct for UTC-timezone families)
+    # if unset or invalid, rather than failing to start.
+    timezone: str = "UTC"
 
     @property
     def database_path(self) -> Path:
@@ -51,6 +65,14 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         return f"sqlite:///{self.database_path}"
+
+    @property
+    def zone_info(self) -> ZoneInfo:
+        try:
+            return ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            _LOGGER.warning("Invalid TIMEZONE '%s', falling back to UTC", self.timezone)
+            return ZoneInfo("UTC")
 
 
 settings = Settings()

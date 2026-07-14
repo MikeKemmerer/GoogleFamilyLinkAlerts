@@ -21,7 +21,7 @@ import hashlib
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from typing import Any
 
 import httpx
@@ -230,11 +230,18 @@ class FamilyLinkApiClient:
             _LOGGER.warning("Failed to fetch time limit rules for %s", account_id)
             return {}
 
-    async def get_applied_time_limits(self, account_id: str) -> dict[str, Any]:
+    async def get_applied_time_limits(self, account_id: str, tz: tzinfo | None = None) -> dict[str, Any]:
         """Per-device applied state: remaining time, bedtime/school windows, lock state.
 
         Parses Google's undocumented positional-array response. See the
         module docstring for why this mirrors upstream's parsing closely.
+
+        `tz` should be the family's local IANA timezone (see
+        `app.config.settings.zone_info`) -- Google's schedule weekday/hour
+        values are local, not UTC, so using UTC here (the default, for
+        backward compatibility) will compute the wrong "today"/"active right
+        now" during the family's evening hours once UTC's calendar date has
+        rolled over ahead of local time.
         """
         params = [("capabilities", "TIME_LIMIT_CLIENT_CAPABILITY_SCHOOLTIME")]
         data = await self._get(
@@ -242,10 +249,11 @@ class FamilyLinkApiClient:
             params=params,
             content_type="application/json+protobuf",
         )
-        return self._parse_applied_time_limits(data)
+        return self._parse_applied_time_limits(data, tz=tz)
 
     @staticmethod
-    def _parse_applied_time_limits(data: Any) -> dict[str, Any]:
+    def _parse_applied_time_limits(data: Any, tz: tzinfo | None = None) -> dict[str, Any]:
+        tz = tz or timezone.utc
         device_lock_states: dict[str, bool] = {}
         devices: dict[str, dict[str, Any]] = {}
         bedtime_enabled_today = False
@@ -259,7 +267,7 @@ class FamilyLinkApiClient:
                 "schooltime_enabled_today": schooltime_enabled_today,
             }
 
-        current_day = datetime.now(timezone.utc).isoweekday()
+        current_day = datetime.now(tz).isoweekday()
 
         for device_data in data[1]:
             if not isinstance(device_data, list) or len(device_data) < 25:
@@ -331,7 +339,7 @@ class FamilyLinkApiClient:
                             and isinstance(start_time, list) and len(start_time) == 2
                             and isinstance(end_time, list) and len(end_time) == 2
                         ):
-                            now = datetime.now(timezone.utc)
+                            now = datetime.now(tz)
                             start_dt = now.replace(hour=start_time[0], minute=start_time[1], second=0, microsecond=0)
                             end_dt = now.replace(hour=end_time[0], minute=end_time[1], second=0, microsecond=0)
                             if end_time[0] < start_time[0] or (end_time[0] == start_time[0] and end_time[1] < start_time[1]):

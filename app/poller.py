@@ -51,7 +51,7 @@ async def _fetch_child_snapshot(client: FamilyLinkApiClient, child_id: str) -> d
 
     snapshot["apps_and_usage"] = await client.get_apps_and_usage(child_id)
     snapshot["time_limit"] = await client.get_time_limit(child_id)
-    snapshot["applied_time_limits"] = await client.get_applied_time_limits(child_id)
+    snapshot["applied_time_limits"] = await client.get_applied_time_limits(child_id, tz=settings.zone_info)
 
     try:
         snapshot["website_filter"] = await get_website_filter(client, child_id)

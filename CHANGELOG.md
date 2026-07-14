@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Fix: bedtime/school-time schedule matching (`bedtime_active`,
+  `bedtime_enabled_today`, `schooltime_active`, `schooltime_enabled_today`,
+  and the displayed bedtime/school-time start/end clock times) is now
+  computed using the family's configured `TIMEZONE` instead of hardcoded
+  UTC. Google's Family Link schedules are in local time, so evaluating
+  "today"/"active right now" against UTC could compute the wrong weekday
+  during the family's evening hours (once UTC's calendar date has already
+  rolled over ahead of local time) and displayed clock times were off by
+  the UTC offset from what's actually configured. Set `TIMEZONE` in `.env`
+  (shared with the `familylink-auth` container) to your family's IANA
+  timezone, e.g. `America/New_York`; defaults to UTC if unset.
 - Fix: `apps_and_usage.appUsageSessions` (a rolling, unstably-ordered
   per-app usage-time window) and `apps_and_usage.apiHeader.serverTimestampMillis`
   (the API response's own timestamp) are now excluded from diffing. In a
