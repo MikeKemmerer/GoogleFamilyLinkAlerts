@@ -215,6 +215,33 @@ def test_settings_page_notifications_toggle_persists(monkeypatch, client, engine
         assert settings_store.get_notifications_enabled(s) is True
 
 
+def test_settings_page_notification_categories_persist(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    from app.db import settings_store
+
+    # Not yet configured -- defaults to every category enabled, and every
+    # checkbox should render checked.
+    resp = client.get("/settings")
+    assert 'name="category_app_blocking" checked' in resp.text
+    assert 'name="category_screen_time" checked' in resp.text
+
+    # Saving with only one category checked leaves just that one enabled.
+    resp2 = client.post("/settings", data={
+        "ntfy_server": "https://ntfy.sh",
+        "ntfy_topic": "my-topic",
+        "poll_interval_minutes": "20",
+        "category_app_blocking": "on",
+    })
+    assert resp2.status_code == 303
+    with Session(engine) as s:
+        assert settings_store.get_enabled_notification_categories(s) == {"app_blocking"}
+
+    resp3 = client.get("/settings")
+    assert 'name="category_app_blocking" checked' in resp3.text
+    assert 'name="category_screen_time" checked' not in resp3.text
+
+
 def test_poll_now_triggers_poll_and_redirects(monkeypatch, client):
     called = {"count": 0}
 

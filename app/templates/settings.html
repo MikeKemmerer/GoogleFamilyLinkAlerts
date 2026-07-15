@@ -22,13 +22,13 @@
 
 <div class="card">
   <h2>Children</h2>
-  <table>
+  <table class="stack-mobile">
     <thead><tr><th>Name</th><th>Monitoring</th><th></th></tr></thead>
     <tbody>
     {% for c in children %}
       <tr>
-        <td>{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }}</td>
-        <td>{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
+        <td data-label="Name">{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }}</td>
+        <td data-label="Monitoring">{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
         <td>
           <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
             <button type="submit">{{ "Disable" if c.enabled else "Enable" }}</button>
@@ -45,13 +45,13 @@
             <summary>Blocked apps ({{ (blocked_apps_by_child.get(c.id) or [])|length }})</summary>
             {% set rules = blocked_apps_by_child.get(c.id) or [] %}
             {% if rules %}
-              <table>
+              <table class="stack-mobile">
                 <thead><tr><th>App</th><th>Always blocked</th><th></th></tr></thead>
                 <tbody>
                 {% for r in rules %}
                   <tr>
-                    <td>{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
-                    <td>{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
+                    <td data-label="App">{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
+                    <td data-label="Always blocked">{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
                     <td>
                       <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
                         <label>
@@ -88,6 +88,17 @@
       Notifications enabled
     </label>
     <p class="hint">Uncheck to mute ntfy push alerts (changes and polling failures are still recorded on the History page either way).</p>
+
+    <label>Notify me about</label>
+    <p class="hint">Uncheck any category below to stop it from pushing a ntfy alert -- it's still recorded on the
+       History page either way, just without the push notification.</p>
+    {% for key, description in notification_categories.items() %}
+      <label style="font-weight: normal; margin-top: 0.35rem;">
+        <input type="checkbox" name="category_{{ key }}" {% if key in enabled_notification_categories %}checked{% endif %}>
+        {{ description }}
+      </label>
+    {% endfor %}
+
     <label for="ntfy_server">ntfy server URL</label>
     <input type="url" id="ntfy_server" name="ntfy_server" value="{{ ntfy_server }}" required>
     <label for="ntfy_topic">ntfy topic</label>

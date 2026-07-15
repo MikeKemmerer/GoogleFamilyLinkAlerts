@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Mobile-friendly layout: pages now stack table rows into readable
+  label/value blocks below ~640px (phones in portrait) instead of
+  squeezing multiple columns into an unreadably narrow view, nav links
+  wrap instead of overflowing, and buttons/links go full-width for easier
+  tapping.
+- Settings page: added a "Notify me about" section with a checkbox per
+  change category (app blocking, screen time & limits, bedtime/school
+  time, device lock, polling issues, everything else) to control which
+  categories of detected change actually push a ntfy alert. Unchecking a
+  category only mutes its push notification -- the change is still
+  recorded and visible on the History page either way. Defaults to every
+  category enabled (matching prior behavior) until explicitly changed.
 - Settings page now shows the running app version (and a link to this
   changelog) in the footer, so it's easy to confirm what's actually
   deployed.

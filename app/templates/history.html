@@ -16,11 +16,15 @@
 {% if failures %}
 <div class="card">
   <h2>Recent polling issues</h2>
-  <table>
+  <table class="stack-mobile">
     <thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead>
     <tbody>
     {% for f in failures %}
-      <tr><td>{{ f.occurred_at }}</td><td>{{ f.kind }}</td><td>{{ f.message }}</td></tr>
+      <tr>
+        <td data-label="When">{{ f.occurred_at }}</td>
+        <td data-label="Kind">{{ f.kind }}</td>
+        <td data-label="Detail">{{ f.message }}</td>
+      </tr>
     {% endfor %}
     </tbody>
   </table>
@@ -32,7 +36,7 @@
   {% if not rows %}
     <p class="muted">No changes detected yet.</p>
   {% else %}
-  <table class="changes-table">
+  <table class="changes-table stack-mobile">
     <colgroup>
       <col style="width: 13%">
       <col style="width: 12%">
@@ -44,9 +48,9 @@
     <tbody>
     {% for row in rows %}
       <tr>
-        <td>{{ row.detected_at }}</td>
-        <td>{% if row.child_avatar_url %}<img class="avatar-sm" src="{{ row.child_avatar_url }}" alt="">{% endif %}{{ row.child_name }}</td>
-        <td>
+        <td data-label="When">{{ row.detected_at }}</td>
+        <td data-label="Child">{% if row.child_avatar_url %}<img class="avatar-sm" src="{{ row.child_avatar_url }}" alt="">{% endif %}{{ row.child_name }}</td>
+        <td data-label="Change">
           <details>
             <summary>{% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}</summary>
             <div class="row-detail">
@@ -61,8 +65,8 @@
             </div>
           </details>
         </td>
-        <td>{{ row.old_display }}</td>
-        <td>{{ row.new_display }}</td>
+        <td data-label="Old">{{ row.old_display }}</td>
+        <td data-label="New">{{ row.new_display }}</td>
       </tr>
     {% endfor %}
     </tbody>

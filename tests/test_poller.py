@@ -472,3 +472,81 @@ async def test_poll_once_skips_ntfy_send_when_notifications_disabled(monkeypatch
         changed = [e for e in events if e.field_path == "applied_time_limits.devices.dev1.remaining_minutes"]
         assert len(changed) == 1
         assert changed[0].notified is False
+
+
+async def test_poll_once_skips_ntfy_send_for_disabled_category(monkeypatch, db_session):
+    """screen_time-category changes shouldn't be pushed to ntfy when that
+    category is unchecked on the Settings page, even though notifications
+    overall are enabled -- see app/notify/categories.py."""
+    from app.db import settings_store
+
+    fake1 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 60}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()  # establishes baseline
+
+    with Session(db_session) as s:
+        settings_store.set_ntfy_config(s, "https://ntfy.sh", "topic")
+        settings_store.set_notifications_enabled(s, True)
+        all_categories = set(settings_store.get_enabled_notification_categories(s))
+        all_categories.discard("screen_time")
+        settings_store.set_enabled_notification_categories(s, all_categories)
+
+    sent = []
+
+    class FakeNtfy:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def send(self, *args, **kwargs):
+            sent.append(args)
+            return True
+
+    monkeypatch.setattr(poller, "NtfyClient", FakeNtfy)
+
+    fake2 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 30}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    assert sent == []
+
+    from sqlmodel import select
+    from app.db.models import ChangeEvent
+    with Session(db_session) as s:
+        events = s.exec(select(ChangeEvent)).all()
+        changed = [e for e in events if e.field_path == "applied_time_limits.devices.dev1.remaining_minutes"]
+        assert len(changed) == 1
+        assert changed[0].notified is False  # still recorded, just not pushed
+
+
+async def test_poll_once_sends_ntfy_for_enabled_category(monkeypatch, db_session):
+    """Sanity check the inverse of the above -- an *enabled* category still
+    gets pushed normally."""
+    from app.db import settings_store
+
+    fake1 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 60}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()  # establishes baseline
+
+    with Session(db_session) as s:
+        settings_store.set_ntfy_config(s, "https://ntfy.sh", "topic")
+        settings_store.set_notifications_enabled(s, True)
+        settings_store.set_enabled_notification_categories(s, {"screen_time"})
+
+    sent = []
+
+    class FakeNtfy:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def send(self, *args, **kwargs):
+            sent.append(args)
+            return True
+
+    monkeypatch.setattr(poller, "NtfyClient", FakeNtfy)
+
+    fake2 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"remaining_minutes": 30}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    assert len(sent) == 1
+

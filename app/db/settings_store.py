@@ -8,6 +8,7 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from .models import AppSetting
+from ..notify.categories import DEFAULT_ENABLED_CATEGORIES
 
 DEFAULT_POLL_INTERVAL_MINUTES = 20
 
@@ -16,6 +17,7 @@ _KEY_NTFY_SERVER = "ntfy_server_url"
 _KEY_NTFY_TOPIC = "ntfy_topic"
 _KEY_SETUP_COMPLETED = "setup_completed"
 _KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+_KEY_ENABLED_NOTIFICATION_CATEGORIES = "enabled_notification_categories"
 
 
 def get(session: Session, key: str, default: str | None = None) -> str | None:
@@ -79,6 +81,25 @@ def get_notifications_enabled(session: Session) -> bool:
 
 def set_notifications_enabled(session: Session, enabled: bool) -> None:
     set_(session, _KEY_NOTIFICATIONS_ENABLED, "true" if enabled else "false")
+
+
+def get_enabled_notification_categories(session: Session) -> set[str]:
+    """Which notification categories (see app/notify/categories.py) should
+    actually be pushed to ntfy. Absent setting (never saved yet) means
+    "all enabled", preserving behavior from before this feature existed --
+    an explicitly saved empty set means "none", which is different from
+    "not yet configured".
+    """
+    raw = get(session, _KEY_ENABLED_NOTIFICATION_CATEGORIES)
+    if raw is None:
+        return set(DEFAULT_ENABLED_CATEGORIES)
+    if raw == "":
+        return set()
+    return set(raw.split(","))
+
+
+def set_enabled_notification_categories(session: Session, categories: set[str]) -> None:
+    set_(session, _KEY_ENABLED_NOTIFICATION_CATEGORIES, ",".join(sorted(categories)))
 
 
 def all_enabled_children(session: Session):

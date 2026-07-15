@@ -40,6 +40,33 @@
                  object-fit: cover; }
     .app-icon-sm { width: 18px; height: 18px; border-radius: 4px; vertical-align: middle; margin-right: 0.35rem;
                    object-fit: cover; }
+
+    /* -- Mobile layout -------------------------------------------------
+       Below ~640px (phones in portrait), stack table rows into
+       label/value blocks instead of horizontally-squeezed columns (which
+       becomes unreadable once a table has 3+ columns on a ~360px-wide
+       viewport). Any <table> that opts in with class="stack-mobile" gets
+       this treatment; each <td> needs a data-label="..." attribute (shown
+       via ::before) since there's no visible <thead> anymore. */
+    @media (max-width: 640px) {
+      body { margin: 0.75rem auto; padding: 0 0.75rem; }
+      h1 { font-size: 1.25rem; }
+      nav { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
+      nav a { margin-right: 0; }
+      .card { padding: 0.9rem; }
+      table.stack-mobile thead { display: none; }
+      table.stack-mobile, table.stack-mobile tbody, table.stack-mobile tr,
+      table.stack-mobile td { display: block; width: 100% !important; }
+      table.stack-mobile tr { border-bottom: 2px solid #e5e5e5; padding: 0.5rem 0; }
+      table.stack-mobile tr:last-child { border-bottom: none; }
+      table.stack-mobile td { border-bottom: none; padding: 0.25rem 0; }
+      table.stack-mobile td[data-label]::before {
+        content: attr(data-label); display: block; font-weight: 600; font-size: 0.72rem;
+        color: #888; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 0.1rem;
+      }
+      table.stack-mobile td:empty { display: none; }
+      .btn, button { width: 100%; box-sizing: border-box; text-align: center; }
+    }
   </style>
 </head>
 <body class="{% block body_class %}{% endblock %}">

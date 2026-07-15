@@ -9,6 +9,7 @@ from .. import __version__
 from ..config import settings
 from ..db import settings_store
 from ..db.models import AppRule, Child, LatestSnapshot
+from ..notify.categories import CATEGORIES
 from .deps import build_auth_client, get_db, templates
 
 router = APIRouter()
@@ -42,6 +43,8 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "ntfy_topic": ntfy_config[1] if ntfy_config else "",
         "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
         "notifications_enabled": settings_store.get_notifications_enabled(session),
+        "notification_categories": CATEGORIES,
+        "enabled_notification_categories": settings_store.get_enabled_notification_categories(session),
         "app_version": __version__,
     })
 
@@ -53,10 +56,12 @@ async def settings_post(request: Request, session: Session = Depends(get_db)):
     ntfy_topic = form.get("ntfy_topic", "").strip()
     poll_interval_minutes = int(form.get("poll_interval_minutes", 20))
     notifications_enabled = form.get("notifications_enabled") is not None
+    enabled_categories = {key for key in CATEGORIES if form.get(f"category_{key}") is not None}
 
     settings_store.set_ntfy_config(session, ntfy_server, ntfy_topic)
     settings_store.set_poll_interval_minutes(session, poll_interval_minutes)
     settings_store.set_notifications_enabled(session, notifications_enabled)
+    settings_store.set_enabled_notification_categories(session, enabled_categories)
 
     scheduler = getattr(request.app.state, "scheduler", None)
     if scheduler is not None:

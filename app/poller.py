@@ -27,6 +27,7 @@ from .familylink.api_client import FamilyLinkApiClient
 from .familylink.auth_client import AuthClient
 from .familylink.exceptions import AuthenticationError, FamilyLinkError, NetworkError, SessionExpiredError
 from .familylink.website_filter import WebsiteFilterNotImplementedError, get_website_filter
+from .notify.categories import category_for_field_path
 from .notify.ntfy import NtfyClient, format_change_message, format_failure_message
 
 _LOGGER = logging.getLogger(__name__)
@@ -77,6 +78,8 @@ async def _maybe_notify_failure(session: Session, failure: PollFailure) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
+    if "polling_issues" not in settings_store.get_enabled_notification_categories(session):
+        return
     title, message = format_failure_message(failure.kind, failure.message)
     client = NtfyClient(*ntfy_config)
     if await client.send(title, message, priority="high", tags=["warning"]):
@@ -95,8 +98,11 @@ async def _maybe_notify_changes(
     ntfy_config = settings_store.get_ntfy_config(session)
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
+    enabled_categories = settings_store.get_enabled_notification_categories(session)
     client = NtfyClient(*ntfy_config)
     for event in events:
+        if category_for_field_path(event.field_path) not in enabled_categories:
+            continue
         title, message = format_change_message(
             child_name, event.field_path, event.old_value, event.new_value, device_names, app_titles
         )
@@ -297,6 +303,8 @@ async def _enforce_always_blocked_apps(
 async def _maybe_notify_enforcement(session: Session, child_name: str, rule: AppRule, event: ChangeEvent) -> None:
     ntfy_config = settings_store.get_ntfy_config(session)
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
+        return
+    if "app_blocking" not in settings_store.get_enabled_notification_categories(session):
         return
     client = NtfyClient(*ntfy_config)
     title = f"Family Link: re-blocked app for {child_name}"
