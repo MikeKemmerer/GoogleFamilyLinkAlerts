@@ -54,12 +54,20 @@ def format_change_message(
     new_value,
     device_names: dict[str, str] | None = None,
     app_titles: dict[str, str] | None = None,
+    tz=None,
 ) -> tuple[str, str]:
-    """Build a human-readable (title, message) pair for a settings change."""
+    """Build a human-readable (title, message) pair for a settings change.
+
+    `tz` (a `zoneinfo.ZoneInfo`) controls how timestamp-valued old/new
+    values are displayed -- see app/db/settings_store.py:get_zone_info.
+    Defaults to the env-configured `settings.zone_info` if the caller
+    doesn't have a DB session handy to look up the user's saved override.
+    """
+    tz = tz or settings.zone_info
     title = f"Family Link change: {child_name}"
     label = humanize_field_path(field_path, device_names, app_titles)
-    old_display = humanize_value(field_path, old_value, tz=settings.zone_info)
-    new_display = humanize_value(field_path, new_value, tz=settings.zone_info)
+    old_display = humanize_value(field_path, old_value, tz=tz)
+    new_display = humanize_value(field_path, new_value, tz=tz)
     message = f"{label}\n{old_display} -> {new_display}"
     return title, message
 

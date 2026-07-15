@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request
 from sqlmodel import Session, select
 
-from ..config import settings
+from ..db import settings_store
 from ..db.models import AppRule, Child, ChangeEvent, LatestSnapshot, PollFailure
 from ..diff.labels import (
     app_icons_from_snapshot,
@@ -43,6 +43,7 @@ async def history(request: Request, session: Session = Depends(get_db)):
     children = session.exec(select(Child)).all()
     child_names = {c.id: c.name for c in children}
     child_avatars = {c.id: c.avatar_url for c in children}
+    tz = settings_store.get_zone_info(session)
 
     # Device IDs are opaque strings (e.g. "aannnppa...") -- resolve them to
     # the friendly names Family Link shows (e.g. "Chromebook") using each
@@ -71,8 +72,8 @@ async def history(request: Request, session: Session = Depends(get_db)):
 
     rows = []
     for e in events:
-        old_display = humanize_value(e.field_path, e.old_value, tz=settings.zone_info)
-        new_display = humanize_value(e.field_path, e.new_value, tz=settings.zone_info)
+        old_display = humanize_value(e.field_path, e.old_value, tz=tz)
+        new_display = humanize_value(e.field_path, e.new_value, tz=tz)
         old_raw = _raw_display(e.old_value)
         new_raw = _raw_display(e.new_value)
         pkg_match = _APP_PKG_FIELD_RE.match(e.field_path)
@@ -80,7 +81,7 @@ async def history(request: Request, session: Session = Depends(get_db)):
             app_icons_by_child.get(e.child_id, {}).get(pkg_match.group("pkg")) if pkg_match else None
         )
         rows.append({
-            "detected_at": to_local(e.detected_at),
+            "detected_at": to_local(e.detected_at, tz),
             "child_name": child_names.get(e.child_id, e.child_id),
             "child_avatar_url": child_avatars.get(e.child_id),
             "field_path": e.field_path,
@@ -102,7 +103,7 @@ async def history(request: Request, session: Session = Depends(get_db)):
 
 
     failure_rows = [
-        {"occurred_at": to_local(f.occurred_at), "kind": f.kind, "message": f.message}
+        {"occurred_at": to_local(f.occurred_at, tz), "kind": f.kind, "message": f.message}
         for f in failures
     ]
 

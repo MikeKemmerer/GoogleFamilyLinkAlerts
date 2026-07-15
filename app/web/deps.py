@@ -4,11 +4,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator
+from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from ..config import settings
+from ..db import settings_store
 from ..db.models import LatestSnapshot
 from ..db.session import get_engine
 
@@ -25,14 +27,14 @@ def build_auth_client():
     return AuthClient(base_url=settings.familylink_auth_base_url, api_key=settings.familylink_auth_api_key)
 
 
-def to_local(dt: datetime) -> datetime:
+def to_local(dt: datetime, tz: ZoneInfo) -> datetime:
     """Convert a stored UTC timestamp (naive or aware -- see
-    app/db/models.py:_utcnow) to the family's configured local timezone, so
-    the web UI never shows a bare timestamp a parent has to mentally convert
-    from UTC.
+    app/db/models.py:_utcnow) to `tz` (the family's configured *display*
+    timezone -- see app/db/settings_store.py:get_zone_info) so the web UI
+    never shows a bare timestamp a parent has to mentally convert from UTC.
     """
     aware = dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    return aware.astimezone(settings.zone_info)
+    return aware.astimezone(tz)
 
 
 def last_poll_times(session: Session) -> dict[str, datetime]:
@@ -46,5 +48,6 @@ def last_poll_times(session: Session) -> dict[str, datetime]:
     cycle failed (each child's fetch is independent; see poll_once's
     per-child try/except).
     """
+    tz = settings_store.get_zone_info(session)
     snapshots = session.exec(select(LatestSnapshot)).all()
-    return {s.child_id: to_local(s.updated_at) for s in snapshots}
+    return {s.child_id: to_local(s.updated_at, tz) for s in snapshots}

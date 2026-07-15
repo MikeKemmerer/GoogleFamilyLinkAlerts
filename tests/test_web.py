@@ -242,6 +242,53 @@ def test_settings_page_notification_categories_persist(monkeypatch, client, engi
     assert 'name="category_screen_time" checked' not in resp3.text
 
 
+def test_settings_page_timezone_persists(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    from app.db import settings_store
+
+    resp = client.post("/settings", data={
+        "ntfy_server": "https://ntfy.sh",
+        "ntfy_topic": "my-topic",
+        "poll_interval_minutes": "20",
+        "timezone": "America/Los_Angeles",
+    })
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/settings?saved=true"
+    with Session(engine) as s:
+        assert settings_store.get_timezone(s) == "America/Los_Angeles"
+
+    resp2 = client.get("/settings", follow_redirects=True)
+    assert 'value="America/Los_Angeles"' in resp2.text
+
+
+def test_settings_page_rejects_invalid_timezone(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    from app.db import settings_store
+
+    # Save a valid timezone first.
+    client.post("/settings", data={
+        "ntfy_server": "https://ntfy.sh",
+        "ntfy_topic": "my-topic",
+        "poll_interval_minutes": "20",
+        "timezone": "America/Los_Angeles",
+    })
+
+    # An invalid one should be rejected, leaving the previously saved value
+    # untouched, and flagged via the tz_error redirect param.
+    resp = client.post("/settings", data={
+        "ntfy_server": "https://ntfy.sh",
+        "ntfy_topic": "my-topic",
+        "poll_interval_minutes": "20",
+        "timezone": "Not/ARealZone",
+    })
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/settings?saved=true&tz_error=true"
+    with Session(engine) as s:
+        assert settings_store.get_timezone(s) == "America/Los_Angeles"
+
+
 def test_poll_now_triggers_poll_and_redirects(monkeypatch, client):
     called = {"count": 0}
 

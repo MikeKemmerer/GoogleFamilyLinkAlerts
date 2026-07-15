@@ -48,13 +48,13 @@ def build_api_client() -> FamilyLinkApiClient:
     return FamilyLinkApiClient(auth_client)
 
 
-async def _fetch_child_snapshot(client: FamilyLinkApiClient, child_id: str) -> dict[str, Any]:
+async def _fetch_child_snapshot(client: FamilyLinkApiClient, child_id: str, tz) -> dict[str, Any]:
     global _website_filter_warned
     snapshot: dict[str, Any] = {}
 
     snapshot["apps_and_usage"] = await client.get_apps_and_usage(child_id)
     snapshot["time_limit"] = await client.get_time_limit(child_id)
-    snapshot["applied_time_limits"] = await client.get_applied_time_limits(child_id, tz=settings.zone_info)
+    snapshot["applied_time_limits"] = await client.get_applied_time_limits(child_id, tz=tz)
 
     try:
         snapshot["website_filter"] = await get_website_filter(client, child_id)
@@ -99,12 +99,13 @@ async def _maybe_notify_changes(
     if not ntfy_config or not settings_store.get_notifications_enabled(session):
         return
     enabled_categories = settings_store.get_enabled_notification_categories(session)
+    tz = settings_store.get_zone_info(session)
     client = NtfyClient(*ntfy_config)
     for event in events:
         if category_for_field_path(event.field_path) not in enabled_categories:
             continue
         title, message = format_change_message(
-            child_name, event.field_path, event.old_value, event.new_value, device_names, app_titles
+            child_name, event.field_path, event.old_value, event.new_value, device_names, app_titles, tz=tz
         )
         if await client.send(title, message, tags=["bell"]):
             event.notified = True
@@ -339,10 +340,11 @@ async def poll_once() -> None:
             return
 
         await _refresh_child_avatars(session, client, children)
+        tz = settings_store.get_zone_info(session)
 
         for child in children:
             try:
-                new_snapshot = await _fetch_child_snapshot(client, child.id)
+                new_snapshot = await _fetch_child_snapshot(client, child.id, tz)
             except SessionExpiredError as err:
                 failure = _record_failure(session, "session_expired", str(err))
                 await _maybe_notify_failure(session, failure)

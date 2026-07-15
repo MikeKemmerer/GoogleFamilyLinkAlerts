@@ -4,6 +4,14 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Settings page: added a "Timezone (for display only)" field so you can pick
+  which IANA timezone the app uses to format timestamps and evaluate
+  bedtime-schedule "active now" status across Status/History/ntfy messages.
+  This is purely a display preference for this app -- it never reads from or
+  writes to the real Google Family Link account's own timezone/settings.
+  Defaults to the `TIMEZONE` value from `.env` until explicitly changed here;
+  invalid entries are rejected with an explanatory message and the
+  previously saved value is left untouched.
 - Mobile-friendly layout: pages now stack table rows into readable
   label/value blocks below ~640px (phones in portrait) instead of
   squeezing multiple columns into an unreadably narrow view, nav links

@@ -1,6 +1,8 @@
 """Ongoing settings page: ntfy config, poll interval, per-child enable/disable."""
 from __future__ import annotations
 
+from zoneinfo import available_timezones
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
@@ -16,7 +18,7 @@ router = APIRouter()
 
 
 @router.get("/settings")
-async def settings_get(request: Request, session: Session = Depends(get_db), saved: bool = False):
+async def settings_get(request: Request, session: Session = Depends(get_db), saved: bool = False, tz_error: bool = False):
     auth_client = build_auth_client()
     healthy = await auth_client.health_ok()
     cookies = await auth_client.get_cookies() if healthy else None
@@ -33,6 +35,7 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
     return templates.TemplateResponse(request, "settings.html", {
         "setup_completed": True,
         "saved": saved,
+        "tz_error": tz_error,
         "auth_healthy": healthy,
         "has_cookies": bool(cookies),
         "auth_ui_url": settings.familylink_auth_ui_url_with_key,
@@ -45,6 +48,8 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "notifications_enabled": settings_store.get_notifications_enabled(session),
         "notification_categories": CATEGORIES,
         "enabled_notification_categories": settings_store.get_enabled_notification_categories(session),
+        "timezone": settings_store.get_timezone(session),
+        "timezone_options": sorted(available_timezones()),
         "app_version": __version__,
     })
 
@@ -57,18 +62,33 @@ async def settings_post(request: Request, session: Session = Depends(get_db)):
     poll_interval_minutes = int(form.get("poll_interval_minutes", 20))
     notifications_enabled = form.get("notifications_enabled") is not None
     enabled_categories = {key for key in CATEGORIES if form.get(f"category_{key}") is not None}
+    timezone_input = form.get("timezone", "").strip()
 
     settings_store.set_ntfy_config(session, ntfy_server, ntfy_topic)
     settings_store.set_poll_interval_minutes(session, poll_interval_minutes)
     settings_store.set_notifications_enabled(session, notifications_enabled)
     settings_store.set_enabled_notification_categories(session, enabled_categories)
 
+    tz_error = False
+    if timezone_input:
+        if settings_store.is_valid_timezone(timezone_input):
+            settings_store.set_timezone(session, timezone_input)
+        else:
+            # Invalid input (typo, not a real IANA name) -- leave the
+            # previously saved timezone untouched rather than silently
+            # falling back to UTC, and flag it so the page can tell the
+            # user why their change didn't take.
+            tz_error = True
+
     scheduler = getattr(request.app.state, "scheduler", None)
     if scheduler is not None:
         from ..poller import reschedule
         reschedule(scheduler, poll_interval_minutes)
 
-    return RedirectResponse("/settings?saved=true", status_code=303)
+    redirect_url = "/settings?saved=true"
+    if tz_error:
+        redirect_url += "&tz_error=true"
+    return RedirectResponse(redirect_url, status_code=303)
 
 
 @router.post("/settings/children/{child_id}/toggle")

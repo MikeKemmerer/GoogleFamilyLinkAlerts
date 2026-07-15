@@ -310,12 +310,12 @@ class FamilyLinkApiClient:
         Parses Google's undocumented positional-array response. See the
         module docstring for why this mirrors upstream's parsing closely.
 
-        `tz` should be the family's local IANA timezone (see
-        `app.config.settings.zone_info`) -- Google's schedule weekday/hour
-        values are local, not UTC, so using UTC here (the default, for
-        backward compatibility) will compute the wrong "today"/"active right
-        now" during the family's evening hours once UTC's calendar date has
-        rolled over ahead of local time.
+        `tz` should be the family's configured local IANA timezone (see
+        `app.db.settings_store.get_zone_info`) -- Google's schedule
+        weekday/hour values are local, not UTC, so using UTC here (the
+        default, for backward compatibility) will compute the wrong
+        "today"/"active right now" during the family's evening hours once
+        UTC's calendar date has rolled over ahead of local time.
         """
         params = [("capabilities", "TIME_LIMIT_CLIENT_CAPABILITY_SCHOOLTIME")]
         data = await self._get(

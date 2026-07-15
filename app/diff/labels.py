@@ -130,11 +130,12 @@ def format_minutes(value: int | float) -> str:
 def humanize_value(field_path: str, value: Any, tz: Any = None) -> str:
     """Best-effort human-readable rendering of a diffed old/new value.
 
-    `tz` (a `datetime.tzinfo`, e.g. `app.config.settings.zone_info`) is used
-    to render millisecond-epoch timestamp fields in the family's local time
-    rather than the container's system time (which is UTC in production) --
-    otherwise displayed bedtime/school-time clock times are off by the UTC
-    offset from what's actually configured in Family Link.
+    `tz` (a `datetime.tzinfo`, e.g. from `app.db.settings_store.get_zone_info`)
+    is used to render millisecond-epoch timestamp fields in the family's
+    configured local time rather than the container's system time (which is
+    UTC in production) -- otherwise displayed bedtime/school-time clock
+    times are off by the UTC offset from what's actually configured in
+    Family Link.
     """
     if value is None:
         return "—"
