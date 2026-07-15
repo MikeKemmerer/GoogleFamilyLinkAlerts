@@ -315,3 +315,47 @@ def test_history_page_lists_events_and_failures(client, engine):
     assert "apps.tiktok.blocked" in resp.text
     assert "Kiddo" in resp.text
     assert "auth_required" in resp.text
+
+
+def test_history_page_filters_by_child(client, engine):
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo"))
+        s.add(Child(id="child2", name="Other Kid"))
+        s.add(ChangeEvent(child_id="child1", field_path="apps.tiktok.blocked", old_value=False, new_value=True))
+        s.add(ChangeEvent(child_id="child2", field_path="apps.roblox.blocked", old_value=False, new_value=True))
+        s.commit()
+
+    resp = client.get("/history", params={"child_id": "child1"})
+    assert resp.status_code == 200
+    assert "apps.tiktok.blocked" in resp.text
+    assert "apps.roblox.blocked" not in resp.text
+
+    resp_all = client.get("/history")
+    assert "apps.tiktok.blocked" in resp_all.text
+    assert "apps.roblox.blocked" in resp_all.text
+
+
+def test_toggle_theme_cycles_and_persists(client, engine):
+    from app.db import settings_store
+
+    resp = client.post("/toggle-theme", data={"next": "/settings"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/settings"
+    with Session(engine) as s:
+        assert settings_store.get_theme(s) == "light"
+
+    client.post("/toggle-theme", data={"next": "/settings"})
+    with Session(engine) as s:
+        assert settings_store.get_theme(s) == "dark"
+
+    # A subsequent GET of an unrelated page must reflect the persisted
+    # theme (the actual bug being fixed -- theme used to only "stick" on
+    # the Settings page because it was the only route that read it back).
+    resp = client.get("/settings")
+    assert 'var theme = "dark"' in resp.text
+
+
+def test_toggle_theme_rejects_unsafe_next(client, engine):
+    resp = client.post("/toggle-theme", data={"next": "//evil.example.com"}, follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"

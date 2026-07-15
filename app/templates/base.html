@@ -19,6 +19,12 @@
   </script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <a href="/" class="site-brand">
+      <svg class="icon logo-icon"><use href="/static/icons.svg#icon-shield"></use></svg>
+      <span class="site-title">Family Link Alerts</span>
+    </a>
+  </header>
   {% if setup_completed %}
   <nav class="top-nav">
     <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
@@ -30,12 +36,16 @@
     <a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
       <svg class="icon icon-lg"><use href="/static/icons.svg#icon-settings"></use></svg>Settings
     </a>
-    <button type="button" class="theme-toggle" onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')" title="Toggle light/dark (this browser only until saved in Settings)">
-      <svg class="icon icon-lg"><use href="/static/icons.svg#icon-sun"></use></svg>
-    </button>
+    <form method="post" action="/toggle-theme" class="theme-toggle-form">
+      <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+      <button type="submit" class="theme-toggle" title="Theme: {{ theme|default('auto')|capitalize }} (click to change)">
+        <svg class="icon icon-lg"><use href="/static/icons.svg#icon-{{ {'light': 'sun', 'dark': 'moon'}.get(theme, 'contrast') }}"></use></svg>
+      </button>
+    </form>
   </nav>
   {% endif %}
   {% block content %}{% endblock %}
 </body>
 </html>
+
 

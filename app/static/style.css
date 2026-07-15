@@ -76,6 +76,16 @@ a:hover { color: var(--accent-hover); }
 .icon { width: 1em; height: 1em; stroke: currentColor; fill: none; flex-shrink: 0; }
 .icon-lg { width: 1.4em; height: 1.4em; }
 
+/* Site brand/logo, shown above the nav on every page. */
+.site-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.site-brand { display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--text); }
+.site-brand:hover { color: var(--accent); }
+.logo-icon { width: 1.6rem; height: 1.6rem; color: var(--accent); }
+.site-title {
+  font-family: "Space Grotesk", system-ui, sans-serif; font-weight: 700; font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+
 /* -- Top nav: single responsive segmented bar. Same markup on phone and
    desktop -- equal-width icon+label segments spanning the header. */
 .top-nav {
@@ -89,8 +99,9 @@ a:hover { color: var(--accent-hover); }
 }
 .top-nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
 .top-nav a:hover { background: var(--surface-alt); }
+.theme-toggle-form { flex: 0 0 auto; margin: 0; display: flex; }
 .top-nav .theme-toggle {
-  flex: 0 0 auto; padding: 0.6rem 0.75rem; cursor: pointer; background: none; border: none;
+  flex: 0 0 auto; margin: 0; padding: 0.6rem 0.75rem; cursor: pointer; background: none; border: none;
   color: var(--text-muted); display: flex; align-items: center;
 }
 .top-nav .theme-toggle:hover { color: var(--accent); background: var(--surface-alt); }
@@ -139,6 +150,11 @@ button:hover, .btn:hover { background: var(--accent-hover); }
   font-size: 0.85rem; color: var(--text-muted);
 }
 .pill-toggle input:checked + span { background: var(--accent); color: var(--accent-contrast); }
+
+/* History page's child filter dropdown. */
+.filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+.filter-bar label { margin: 0; font-weight: 600; font-size: 0.85rem; }
+.filter-bar select { margin: 0; width: auto; }
 
 table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
 th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }

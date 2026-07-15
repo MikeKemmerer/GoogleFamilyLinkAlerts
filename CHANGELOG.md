@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Fixed a theme-persistence bug: the saved Light/Dark/Auto theme (set on the
+  Settings page) previously only actually applied on the Settings page
+  itself -- every other page (Status, History, first-run setup) silently
+  ignored the saved value and always fell back to Auto, and the nav bar's
+  quick theme-toggle button never persisted at all (it reset on the next
+  page navigation). Both are now fixed: every page consistently reflects
+  the saved theme, and the nav toggle button now saves immediately
+  (cycling Auto -> Light -> Dark -> Auto) instead of being a client-only,
+  per-tab flip.
+- Added a persistent site logo/title (shield icon + "Family Link Alerts"
+  wordmark) above the nav bar on every page.
+- History page: added a "Filter by child" dropdown so you can narrow the
+  change list down to a single child instead of always seeing everyone's
+  changes mixed together.
+- Settings page: moved "App Rules -- Always-blocked apps" to sit between
+  "Children" and "Notifications" (previously it was last, after the
+  Notifications/Polling/Display save button).
 - **Visual redesign**: new warm amber/coral accent theme with light/dark
   mode support (auto-detects your browser/OS `prefers-color-scheme`, with
   a manual Auto/Light/Dark override saved in Settings -> Display). Added

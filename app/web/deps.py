@@ -51,3 +51,17 @@ def last_poll_times(session: Session) -> dict[str, datetime]:
     tz = settings_store.get_zone_info(session)
     snapshots = session.exec(select(LatestSnapshot)).all()
     return {s.child_id: to_local(s.updated_at, tz) for s in snapshots}
+
+
+def render(request, template_name: str, session: Session, context: dict):
+    """`templates.TemplateResponse` wrapper that always injects context every
+    page needs regardless of which route renders it -- currently just the
+    saved display theme (see settings_store.get_theme). Every route that
+    extends base.html should go through this rather than calling
+    `templates.TemplateResponse` directly, so a shared context value like
+    theme can never be silently missing from one page but not another
+    (which is exactly how the Settings page's theme picker used to have no
+    effect anywhere except the Settings page itself).
+    """
+    merged = {"theme": settings_store.get_theme(session), **context}
+    return templates.TemplateResponse(request, template_name, merged)

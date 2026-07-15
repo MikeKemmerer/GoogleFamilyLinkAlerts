@@ -10,9 +10,15 @@ from ..config import settings
 from ..db import settings_store
 from ..db.models import AppRule, Child, LatestSnapshot
 from ..notify.categories import CATEGORIES
-from .deps import build_auth_client, get_db, templates
+from .deps import build_auth_client, get_db, render
 
 router = APIRouter()
+
+# Cycled by the nav bar's quick theme-toggle button (see /toggle-theme
+# below and app/templates/base.html) -- each click advances one step and
+# persists immediately, independent of the explicit Auto/Light/Dark pill
+# in the Settings -> Display section (which sets the value directly).
+_THEME_CYCLE = ("auto", "light", "dark")
 
 
 @router.get("/settings")
@@ -30,7 +36,7 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
     for rules in blocked_apps_by_child.values():
         rules.sort(key=lambda r: r.title.lower())
 
-    return templates.TemplateResponse(request, "settings.html", {
+    return render(request, "settings.html", session, {
         "setup_completed": True,
         "saved": saved,
         "tz_error": tz_error,
@@ -48,7 +54,6 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "enabled_notification_categories": settings_store.get_enabled_notification_categories(session),
         "timezone": settings_store.get_timezone(session),
         "timezone_groups": settings_store.get_timezone_options(session),
-        "theme": settings_store.get_theme(session),
         "app_version": __version__,
     })
 
@@ -96,6 +101,26 @@ async def settings_post(request: Request, session: Session = Depends(get_db)):
     if tz_error:
         redirect_url += "&tz_error=true"
     return RedirectResponse(redirect_url, status_code=303)
+
+
+@router.post("/toggle-theme")
+async def toggle_theme(request: Request, session: Session = Depends(get_db)):
+    """Advances the saved theme one step (auto -> light -> dark -> auto)
+    and redirects back to whichever page the toggle was clicked from --
+    used by the quick theme button in the nav bar (app/templates/base.html),
+    which needs to persist immediately rather than being a client-only,
+    per-tab flip that resets on the next navigation.
+    """
+    form = await request.form()
+    next_path = form.get("next") or "/"
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        # Guard against an open redirect via a crafted "next" value --
+        # only ever allow relative paths within this app.
+        next_path = "/"
+    current = settings_store.get_theme(session)
+    new_theme = _THEME_CYCLE[(_THEME_CYCLE.index(current) + 1) % len(_THEME_CYCLE)]
+    settings_store.set_theme(session, new_theme)
+    return RedirectResponse(next_path, status_code=303)
 
 
 @router.post("/settings/children/{child_id}/toggle")

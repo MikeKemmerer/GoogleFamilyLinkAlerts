@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
 <!-- Self-hosted Lucide icons (ISC license, https://lucide.dev) -->
+  <symbol id="icon-contrast" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="10" />
+  <path d="M12 18a6 6 0 0 0 0-12v12z" />
+  </symbol>
   <symbol id="icon-ban" viewBox="0 0 24 24">
 <circle cx="12" cy="12" r="10" />
   <path d="M4.929 4.929 19.07 19.071" />

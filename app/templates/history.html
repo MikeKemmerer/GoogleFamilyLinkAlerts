@@ -4,6 +4,18 @@
 {% block content %}
 <h1><svg class="icon icon-lg"><use href="/static/icons.svg#icon-list"></use></svg>Change history</h1>
 
+{% if children %}
+<form method="get" action="/history" class="filter-bar">
+  <label for="child_id">Filter by child</label>
+  <select id="child_id" name="child_id" onchange="this.form.requestSubmit()">
+    <option value="" {% if not selected_child_id %}selected{% endif %}>All children</option>
+    {% for c in children %}
+      <option value="{{ c.id }}" {% if c.id == selected_child_id %}selected{% endif %}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+{% endif %}
+
 {% if child_names %}
 <p class="muted">
   Last successful poll —

@@ -54,6 +54,46 @@
   </div>
 </details>
 
+<!-- Always-blocked toggles POST immediately to their own endpoint, so
+     this section also stays outside the Save-everything form below. -->
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-ban"></use></svg>App Rules — Always-blocked apps</summary>
+  <div class="accordion-body">
+    {% for c in children %}
+      <details style="margin-top: 0.6rem;">
+        <summary>{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }} -- blocked apps ({{ (blocked_apps_by_child.get(c.id) or [])|length }})</summary>
+        {% set rules = blocked_apps_by_child.get(c.id) or [] %}
+        {% if rules %}
+          <table class="stack-mobile">
+            <thead><tr><th>App</th><th>Always blocked</th><th></th></tr></thead>
+            <tbody>
+            {% for r in rules %}
+              <tr>
+                <td data-label="App">{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
+                <td data-label="Always blocked">{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
+                <td>
+                  <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
+                    <label>
+                      <input type="checkbox" onchange="this.form.requestSubmit()" {% if r.always_blocked %}checked{% endif %}>
+                      Always blocked
+                    </label>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <p class="hint">Checking "Always blocked" means: if this app is ever found enabled on a future
+             poll (re-enabled by the child, or anyone else), the next poll immediately blocks it again.</p>
+        {% else %}
+          <p class="hint">No apps have been seen blocked for {{ c.name }} yet. Apps show up here the first
+             time a poll observes them blocked in Family Link.</p>
+        {% endif %}
+      </details>
+    {% endfor %}
+  </div>
+</details>
+
 <!-- One form wraps the Notifications/Polling/Display sections so a single
      "Save" submits everything together (matches the single POST
      /settings handler, which expects all these fields at once) -- the
@@ -130,46 +170,6 @@
 
 <button type="submit">Save</button>
 </form>
-
-<!-- Always-blocked toggles POST immediately to their own endpoint, so
-     this section also stays outside the Save-everything form above. -->
-<details class="accordion">
-  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-ban"></use></svg>App Rules — Always-blocked apps</summary>
-  <div class="accordion-body">
-    {% for c in children %}
-      <details style="margin-top: 0.6rem;">
-        <summary>{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }} -- blocked apps ({{ (blocked_apps_by_child.get(c.id) or [])|length }})</summary>
-        {% set rules = blocked_apps_by_child.get(c.id) or [] %}
-        {% if rules %}
-          <table class="stack-mobile">
-            <thead><tr><th>App</th><th>Always blocked</th><th></th></tr></thead>
-            <tbody>
-            {% for r in rules %}
-              <tr>
-                <td data-label="App">{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
-                <td data-label="Always blocked">{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
-                <td>
-                  <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
-                    <label>
-                      <input type="checkbox" onchange="this.form.requestSubmit()" {% if r.always_blocked %}checked{% endif %}>
-                      Always blocked
-                    </label>
-                  </form>
-                </td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-          <p class="hint">Checking "Always blocked" means: if this app is ever found enabled on a future
-             poll (re-enabled by the child, or anyone else), the next poll immediately blocks it again.</p>
-        {% else %}
-          <p class="hint">No apps have been seen blocked for {{ c.name }} yet. Apps show up here the first
-             time a poll observes them blocked in Family Link.</p>
-        {% endif %}
-      </details>
-    {% endfor %}
-  </div>
-</details>
 
 <p class="muted">
   Family Link Alerts v{{ app_version }} ·

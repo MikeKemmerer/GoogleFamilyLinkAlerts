@@ -10,7 +10,7 @@ from ..db import settings_store
 from ..db.models import Child, LatestSnapshot
 from ..diff.labels import device_names_from_snapshot, format_minutes
 from ..poller import poll_once
-from .deps import build_auth_client, get_db, last_poll_times, templates
+from .deps import build_auth_client, get_db, last_poll_times, render
 
 router = APIRouter()
 
@@ -84,7 +84,7 @@ async def root(request: Request, session: Session = Depends(get_db), polled: boo
 
     device_summaries = _build_device_summaries(session, enabled_children)
 
-    return templates.TemplateResponse(request, "status.html", {
+    return render(request, "status.html", session, {
         "setup_completed": True,
         "polled": polled,
         "auth_healthy": healthy,

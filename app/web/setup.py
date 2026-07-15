@@ -10,7 +10,7 @@ from ..db import settings_store
 from ..db.models import Child
 from ..familylink.api_client import FamilyLinkApiClient
 from ..familylink.exceptions import AuthenticationError, FamilyLinkError
-from .deps import build_auth_client, get_db, templates
+from .deps import build_auth_client, get_db, render
 
 router = APIRouter()
 
@@ -31,7 +31,7 @@ async def setup_get(request: Request, session: Session = Depends(get_db)):
             auth_error = str(err)
 
     if not healthy or not cookies:
-        return templates.TemplateResponse(request, "setup.html", {
+        return render(request, "setup.html", session, {
             "stage": "auth",
             "healthy": healthy,
             "auth_error": auth_error,
@@ -48,18 +48,18 @@ async def setup_get(request: Request, session: Session = Depends(get_db)):
             await api_client.authenticate()
             discovered = await api_client.get_all_supervised_children()
         except (FamilyLinkError, ValueError) as err:
-            return templates.TemplateResponse(request, "setup.html", {
+            return render(request, "setup.html", session, {
                 "stage": "discover_error",
                 "error": str(err),
                 "setup_completed": False,
             })
-        return templates.TemplateResponse(request, "setup.html", {
+        return render(request, "setup.html", session, {
             "stage": "children",
             "discovered": discovered,
             "setup_completed": False,
         })
 
-    return templates.TemplateResponse(request, "setup.html", {
+    return render(request, "setup.html", session, {
         "stage": "notify",
         "setup_completed": False,
     })

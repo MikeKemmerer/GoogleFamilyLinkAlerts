@@ -18,7 +18,7 @@ from ..diff.labels import (
     humanize_value,
 )
 from ..notify.categories import category_for_field_path
-from .deps import get_db, last_poll_times, templates, to_local
+from .deps import get_db, last_poll_times, render, to_local
 
 router = APIRouter()
 
@@ -51,8 +51,14 @@ def _raw_display(value: Any) -> str:
 
 
 @router.get("/history")
-async def history(request: Request, session: Session = Depends(get_db)):
-    events = session.exec(select(ChangeEvent).order_by(ChangeEvent.detected_at.desc()).limit(200)).all()
+async def history(request: Request, session: Session = Depends(get_db), child_id: str = ""):
+    events_query = select(ChangeEvent).order_by(ChangeEvent.detected_at.desc()).limit(200)
+    if child_id:
+        # Filter first, then apply the same limit -- otherwise a child with
+        # few recent changes could be crowded out of the newest 200 rows by
+        # other children's changes before we ever get to filter by child.
+        events_query = select(ChangeEvent).where(ChangeEvent.child_id == child_id).order_by(ChangeEvent.detected_at.desc()).limit(200)
+    events = session.exec(events_query).all()
     failures = session.exec(select(PollFailure).order_by(PollFailure.occurred_at.desc()).limit(50)).all()
     children = session.exec(select(Child)).all()
     child_names = {c.id: c.name for c in children}
@@ -125,10 +131,12 @@ async def history(request: Request, session: Session = Depends(get_db)):
     poll_times = last_poll_times(session)
     last_poll_by_child = {child.id: poll_times.get(child.id) for child in children}
 
-    return templates.TemplateResponse(request, "history.html", {
+    return render(request, "history.html", session, {
         "setup_completed": True,
         "rows": rows,
         "failures": failure_rows,
+        "children": children,
+        "selected_child_id": child_id,
         "child_names": child_names,
         "child_avatars": child_avatars,
         "last_poll_by_child": last_poll_by_child,
