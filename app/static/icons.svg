@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<!-- Self-hosted Lucide icons (ISC license, https://lucide.dev) -->
+  <symbol id="icon-ban" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="10" />
+  <path d="M4.929 4.929 19.07 19.071" />
+  </symbol>
+  <symbol id="icon-bed" viewBox="0 0 24 24">
+<path d="M2 4v16" />
+  <path d="M2 8h18a2 2 0 0 1 2 2v10" />
+  <path d="M2 17h20" />
+  <path d="M6 8v9" />
+  </symbol>
+  <symbol id="icon-bell" viewBox="0 0 24 24">
+<path d="M10.268 21a2 2 0 0 0 3.464 0" />
+  <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" />
+  </symbol>
+  <symbol id="icon-chevron-down" viewBox="0 0 24 24">
+<path d="m6 9 6 6 6-6" />
+  </symbol>
+  <symbol id="icon-clock" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="10" />
+  <path d="M12 6v6l4 2" />
+  </symbol>
+  <symbol id="icon-globe" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="10" />
+  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+  <path d="M2 12h20" />
+  </symbol>
+  <symbol id="icon-house" viewBox="0 0 24 24">
+<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
+  <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  </symbol>
+  <symbol id="icon-key" viewBox="0 0 24 24">
+<path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4" />
+  <path d="m21 2-9.6 9.6" />
+  <circle cx="7.5" cy="15.5" r="5.5" />
+  </symbol>
+  <symbol id="icon-list" viewBox="0 0 24 24">
+<path d="M3 5h.01" />
+  <path d="M3 12h.01" />
+  <path d="M3 19h.01" />
+  <path d="M8 5h13" />
+  <path d="M8 12h13" />
+  <path d="M8 19h13" />
+  </symbol>
+  <symbol id="icon-lock" viewBox="0 0 24 24">
+<rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </symbol>
+  <symbol id="icon-monitor-check" viewBox="0 0 24 24">
+<path d="m9 10 2 2 4-4" />
+  <rect width="20" height="14" x="2" y="3" rx="2" />
+  <path d="M12 17v4" />
+  <path d="M8 21h8" />
+  </symbol>
+  <symbol id="icon-moon" viewBox="0 0 24 24">
+<path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401" />
+  </symbol>
+  <symbol id="icon-phone-off" viewBox="0 0 24 24">
+<path d="M10.1 13.9a14 14 0 0 0 3.732 2.668 1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2 18 18 0 0 1-12.728-5.272" />
+  <path d="M22 2 2 22" />
+  <path d="M4.76 13.582A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 .244.473" />
+  </symbol>
+  <symbol id="icon-plug" viewBox="0 0 24 24">
+<path d="M12 22v-5" />
+  <path d="M15 8V2" />
+  <path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" />
+  <path d="M9 8V2" />
+  </symbol>
+  <symbol id="icon-refresh-cw" viewBox="0 0 24 24">
+<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+  <path d="M21 3v5h-5" />
+  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+  <path d="M8 16H3v5" />
+  </symbol>
+  <symbol id="icon-settings" viewBox="0 0 24 24">
+<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+  <circle cx="12" cy="12" r="3" />
+  </symbol>
+  <symbol id="icon-shield" viewBox="0 0 24 24">
+<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+  </symbol>
+  <symbol id="icon-smartphone" viewBox="0 0 24 24">
+<rect width="14" height="20" x="5" y="2" rx="2" ry="2" />
+  <path d="M12 18h.01" />
+  </symbol>
+  <symbol id="icon-sun" viewBox="0 0 24 24">
+<circle cx="12" cy="12" r="4" />
+  <path d="M12 2v2" />
+  <path d="M12 20v2" />
+  <path d="m4.93 4.93 1.41 1.41" />
+  <path d="m17.66 17.66 1.41 1.41" />
+  <path d="M2 12h2" />
+  <path d="M20 12h2" />
+  <path d="m6.34 17.66-1.41 1.41" />
+  <path d="m19.07 4.93-1.41 1.41" />
+  </symbol>
+  <symbol id="icon-tablet" viewBox="0 0 24 24">
+<rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
+  <line x1="12" x2="12.01" y1="18" y2="18" />
+  </symbol>
+  <symbol id="icon-users" viewBox="0 0 24 24">
+<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+  <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+  <circle cx="9" cy="7" r="4" />
+  </symbol>
+  <symbol id="icon-wifi" viewBox="0 0 24 24">
+<path d="M12 20h.01" />
+  <path d="M2 8.82a15 15 0 0 1 20 0" />
+  <path d="M5 12.859a10 10 0 0 1 14 0" />
+  <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+  </symbol>
+</svg>

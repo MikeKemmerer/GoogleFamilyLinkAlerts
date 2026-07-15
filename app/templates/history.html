@@ -2,7 +2,7 @@
 {% block title %}History — Family Link Alerts{% endblock %}
 {% block body_class %}wide{% endblock %}
 {% block content %}
-<h1>Change history</h1>
+<h1><svg class="icon icon-lg"><use href="/static/icons.svg#icon-list"></use></svg>Change history</h1>
 
 {% if child_names %}
 <p class="muted">
@@ -15,7 +15,7 @@
 
 {% if failures %}
 <div class="card">
-  <h2>Recent polling issues</h2>
+  <h2><svg class="icon"><use href="/static/icons.svg#icon-ban"></use></svg>Recent polling issues</h2>
   <table class="stack-mobile">
     <thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead>
     <tbody>
@@ -32,7 +32,7 @@
 {% endif %}
 
 <div class="card">
-  <h2>Detected changes</h2>
+  <h2><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Detected changes</h2>
   {% if not rows %}
     <p class="muted">No changes detected yet.</p>
   {% else %}
@@ -52,7 +52,10 @@
         <td data-label="Child">{% if row.child_avatar_url %}<img class="avatar-sm" src="{{ row.child_avatar_url }}" alt="">{% endif %}{{ row.child_name }}</td>
         <td data-label="Change">
           <details>
-            <summary>{% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}</summary>
+            <summary>
+              <svg class="icon"><use href="/static/icons.svg#icon-{{ row.category_icon or 'bell' }}"></use></svg>
+              {% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}
+            </summary>
             <div class="row-detail">
               <div class="field-path">{{ row.field_path }}</div>
               {% if row.old_raw is not none %}

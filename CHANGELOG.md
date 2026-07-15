@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Visual redesign**: new warm amber/coral accent theme with light/dark
+  mode support (auto-detects your browser/OS `prefers-color-scheme`, with
+  a manual Auto/Light/Dark override saved in Settings -> Display). Added
+  self-hosted Space Grotesk headings + a self-hosted Lucide icon set (no
+  third-party CDN calls -- nothing about your browsing leaks to an
+  external asset host). The old small text-link nav in the corner is now
+  a single responsive segmented top nav bar (icon + label, same layout on
+  phone and desktop). Settings is now organized into collapsible
+  accordion sections (Connection, Children, Notifications, Polling,
+  Display, App Rules) instead of one long scroll. The timezone field is
+  now a real dropdown with a curated list of common zones (grouped by
+  region) instead of a free-text box, with an "Other..." option for
+  anything not listed. Status page gained a row of glanceable stat cards
+  (auth health, session, children monitored, last poll); History rows now
+  show a category icon.
 - Settings page: added a "Timezone (for display only)" field so you can pick
   which IANA timezone the app uses to format timestamps and evaluate
   bedtime-schedule "active now" status across Status/History/ntfy messages.

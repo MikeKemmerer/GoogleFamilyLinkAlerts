@@ -17,9 +17,23 @@ from ..diff.labels import (
     humanize_field_path,
     humanize_value,
 )
+from ..notify.categories import category_for_field_path
 from .deps import get_db, last_poll_times, templates, to_local
 
 router = APIRouter()
+
+# Maps each notification category (app.notify.categories.CATEGORIES) to a
+# self-hosted Lucide icon id (see app/static/icons.svg) shown next to each
+# History row's change label.
+_CATEGORY_ICONS: dict[str, str] = {
+    "app_blocking": "phone-off",
+    "screen_time": "clock",
+    "bedtime_schooltime": "bed",
+    "device_lock": "lock",
+    "polling_issues": "ban",
+    "other": "bell",
+}
+
 
 _APP_PKG_FIELD_RE = re.compile(r"^apps_and_usage\.apps\[(?P<pkg>[^\]]+)\]\.")
 
@@ -86,6 +100,7 @@ async def history(request: Request, session: Session = Depends(get_db)):
             "child_avatar_url": child_avatars.get(e.child_id),
             "field_path": e.field_path,
             "icon_url": icon_url,
+            "category_icon": _CATEGORY_ICONS.get(category_for_field_path(e.field_path), "bell"),
             "label": humanize_field_path(
                 e.field_path, device_names_by_child.get(e.child_id, {}), app_titles_by_child.get(e.child_id, {})
             ),

@@ -1,36 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Status — Family Link Alerts{% endblock %}
 {% block content %}
-<h1>Family Link Alerts</h1>
+<h1><svg class="icon icon-lg"><use href="/static/icons.svg#icon-shield"></use></svg>Family Link Alerts</h1>
 
 {% if polled %}<div class="flash">Poll cycle complete -- check History for any detected changes.</div>{% endif %}
 
+<div class="stat-grid">
+  <div class="stat-card">
+    <svg class="icon icon-lg"><use href="/static/icons.svg#icon-wifi"></use></svg>
+    <div>
+      <div class="stat-label">Auth link</div>
+      <div class="stat-value">{% if auth_healthy %}Reachable{% else %}Unreachable{% endif %}</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <svg class="icon icon-lg"><use href="/static/icons.svg#icon-key"></use></svg>
+    <div>
+      <div class="stat-label">Session</div>
+      <div class="stat-value">{% if has_cookies %}Logged in{% else %}Not logged in{% endif %}</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <svg class="icon icon-lg"><use href="/static/icons.svg#icon-users"></use></svg>
+    <div>
+      <div class="stat-label">Monitoring</div>
+      <div class="stat-value">{{ children_count }} child(ren)</div>
+    </div>
+  </div>
+  <div class="stat-card">
+    <svg class="icon icon-lg"><use href="/static/icons.svg#icon-clock"></use></svg>
+    <div>
+      <div class="stat-label">Last poll</div>
+      <div class="stat-value">{% if last_poll_at %}{{ last_poll_at }}{% else %}Never yet{% endif %}</div>
+    </div>
+  </div>
+</div>
+
 <div class="card">
-  <h2>Status</h2>
-  <p>
-    familylink-auth:
-    {% if auth_healthy %}<span class="badge badge-ok">reachable</span>{% else %}<span class="badge badge-bad">unreachable</span>{% endif %}
-    &nbsp;·&nbsp;
-    Session:
-    {% if has_cookies %}<span class="badge badge-ok">logged in</span>{% else %}<span class="badge badge-bad">not logged in</span>{% endif %}
-  </p>
-  <p class="muted">Monitoring {{ children_count }} child(ren), polling every ~{{ poll_interval_minutes }} minutes.</p>
-  <p class="muted">
-    Last successful poll:
-    {% if last_poll_at %}{{ last_poll_at }}{% else %}never yet{% endif %}
-  </p>
+  <p class="muted">Polling every ~{{ poll_interval_minutes }} minutes.</p>
   {% if not has_cookies %}
     <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
        &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a> to re-authenticate.</p>
   {% endif %}
   <form method="post" action="/poll-now">
-    <button type="submit">Poll now</button>
+    <button type="submit"><svg class="icon"><use href="/static/icons.svg#icon-refresh-cw"></use></svg> Poll now</button>
   </form>
 </div>
 
 {% if device_summaries %}
 <div class="card">
-  <h2>Screen time today</h2>
+  <h2><svg class="icon"><use href="/static/icons.svg#icon-sun"></use></svg>Screen time today</h2>
   {% for summary in device_summaries %}
     <div style="margin-bottom: 1rem;">
       <p style="margin: 0 0 0.3rem;">
@@ -43,10 +62,11 @@
       {% for device in summary.devices %}
         <details {% if device.used_today %}open{% endif %} style="margin-left: 1.5rem;">
           <summary>
+            <svg class="icon"><use href="/static/icons.svg#icon-{% if device.name and 'phone' in device.name.lower() %}smartphone{% else %}tablet{% endif %}"></use></svg>
             {{ device.name }} — {{ device.used_display }} used
-            {% if device.locked %}<span class="badge badge-bad">locked</span>{% endif %}
-            {% if device.bedtime_active %}<span class="badge">bedtime</span>{% endif %}
-            {% if device.schooltime_active %}<span class="badge">school time</span>{% endif %}
+            {% if device.locked %}<span class="badge badge-bad"><svg class="icon"><use href="/static/icons.svg#icon-lock"></use></svg>locked</span>{% endif %}
+            {% if device.bedtime_active %}<span class="badge"><svg class="icon"><use href="/static/icons.svg#icon-bed"></use></svg>bedtime</span>{% endif %}
+            {% if device.schooltime_active %}<span class="badge"><svg class="icon"><use href="/static/icons.svg#icon-monitor-check"></use></svg>school time</span>{% endif %}
           </summary>
           <div class="row-detail hint">
             {% if device.daily_limit_display %}Daily limit: {{ device.daily_limit_display }} · {% endif %}
@@ -61,7 +81,7 @@
 {% endif %}
 
 <div class="card">
-  <h2>Recent activity</h2>
+  <h2><svg class="icon"><use href="/static/icons.svg#icon-list"></use></svg>Recent activity</h2>
   <p><a href="/history">View full change history &amp; polling issues &rarr;</a></p>
 </div>
 {% endblock %}

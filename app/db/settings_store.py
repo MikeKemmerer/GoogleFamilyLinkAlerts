@@ -22,6 +22,10 @@ _KEY_SETUP_COMPLETED = "setup_completed"
 _KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
 _KEY_ENABLED_NOTIFICATION_CATEGORIES = "enabled_notification_categories"
 _KEY_TIMEZONE = "timezone"
+_KEY_THEME = "theme"
+
+VALID_THEMES = ("auto", "light", "dark")
+DEFAULT_THEME = "auto"
 
 
 def get(session: Session, key: str, default: str | None = None) -> str | None:
@@ -139,6 +143,62 @@ def get_zone_info(session: Session) -> ZoneInfo:
         return ZoneInfo(tz)
     except (ZoneInfoNotFoundError, ValueError):
         return ZoneInfo("UTC")
+
+
+CURATED_TIMEZONES: list[tuple[str, list[str]]] = [
+    ("US & Canada", [
+        "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+        "America/Los_Angeles", "America/Anchorage", "Pacific/Honolulu", "America/Toronto",
+        "America/Vancouver",
+    ]),
+    ("Europe", [
+        "Europe/London", "Europe/Dublin", "Europe/Paris", "Europe/Berlin", "Europe/Madrid",
+        "Europe/Rome", "Europe/Amsterdam", "Europe/Zurich", "Europe/Athens", "Europe/Moscow",
+    ]),
+    ("Asia & Middle East", [
+        "Asia/Tokyo", "Asia/Shanghai", "Asia/Hong_Kong", "Asia/Singapore", "Asia/Seoul",
+        "Asia/Kolkata", "Asia/Dubai", "Asia/Bangkok", "Asia/Jakarta", "Asia/Istanbul",
+    ]),
+    ("Oceania", ["Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Pacific/Auckland"]),
+    ("Africa & South America", [
+        "Africa/Cairo", "Africa/Johannesburg", "Africa/Lagos", "America/Sao_Paulo",
+        "America/Mexico_City", "America/Bogota", "America/Argentina/Buenos_Aires",
+    ]),
+    ("UTC", ["UTC"]),
+]
+"""A short, curated list of common IANA timezones (grouped by region) for
+the Settings-page dropdown, rather than all ~600 zones in
+zoneinfo.available_timezones() -- picked for the handful of zones a typical
+family is actually in. See get_timezone_options() for how a currently-saved
+value outside this list is still surfaced without silently disappearing."""
+
+
+def get_timezone_options(session: Session) -> list[tuple[str, list[str]]]:
+    """The curated timezone groups for the Settings dropdown, plus (if the
+    currently-effective timezone isn't already one of the curated options)
+    an extra "Current" group so a previously-saved or env-configured value
+    is never silently dropped from the list a user sees.
+    """
+    current = get_timezone(session)
+    curated_names = {name for _, names in CURATED_TIMEZONES for name in names}
+    if current in curated_names:
+        return CURATED_TIMEZONES
+    return [("Current", [current])] + CURATED_TIMEZONES
+
+
+def get_theme(session: Session) -> str:
+    """UI color scheme preference: "auto" (follow the browser/OS
+    prefers-color-scheme), "light", or "dark". Purely a display
+    preference for this app's own web UI -- unrelated to Family Link.
+    """
+    value = get(session, _KEY_THEME)
+    return value if value in VALID_THEMES else DEFAULT_THEME
+
+
+def set_theme(session: Session, theme: str) -> None:
+    if theme not in VALID_THEMES:
+        raise ValueError(f"Invalid theme: {theme!r}")
+    set_(session, _KEY_THEME, theme)
 
 
 def all_enabled_children(session: Session):

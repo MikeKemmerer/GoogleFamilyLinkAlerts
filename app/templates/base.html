@@ -4,79 +4,38 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Family Link Alerts{% endblock %}</title>
-  <style>
-    body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; max-width: 780px;
-           margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; }
-    body.wide { max-width: 960px; }
-    h1 { font-size: 1.4rem; }
-    nav { margin-bottom: 1.5rem; }
-    nav a { margin-right: 1rem; text-decoration: none; color: #2c5aa0; }
-    .card { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
-    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
-    .badge-ok { background: #d4edda; color: #155724; }
-    .badge-bad { background: #f8d7da; color: #721c24; }
-    label { display: block; margin-top: 0.75rem; font-weight: 600; }
-    input[type=text], input[type=number], input[type=url] {
-      width: 100%; padding: 0.4rem; margin-top: 0.25rem; box-sizing: border-box;
-    }
-    button, .btn { margin-top: 1rem; padding: 0.5rem 1rem; border: none; border-radius: 6px;
-           background: #2c5aa0; color: #fff; cursor: pointer; font-size: 1rem; text-decoration: none;
-           display: inline-block; }
-    button:hover, .btn:hover { background: #1e3f73; }
-    table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-    th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #eee; font-size: 0.9rem; }
-    .changes-table { table-layout: fixed; }
-    .changes-table td, .changes-table th { overflow-wrap: anywhere; word-break: break-word; }
-    .changes-table summary { cursor: pointer; }
-    .row-detail { margin-top: 0.4rem; }
-    .muted { color: #777; font-size: 0.9rem; }
-    .hint { color: #777; font-size: 0.85rem; margin-top: 0.4rem; }
-    .field-path { color: #999; font-size: 0.75rem; font-family: Consolas, monospace; margin-top: 0.15rem;
-                  overflow-wrap: anywhere; word-break: break-word; }
-    .flash { background: #fff3cd; border: 1px solid #ffe69c; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
-    .avatar-sm { width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; margin-right: 0.35rem;
-                 object-fit: cover; }
-    .avatar-md { width: 32px; height: 32px; border-radius: 50%; vertical-align: middle; margin-right: 0.5rem;
-                 object-fit: cover; }
-    .app-icon-sm { width: 18px; height: 18px; border-radius: 4px; vertical-align: middle; margin-right: 0.35rem;
-                   object-fit: cover; }
-
-    /* -- Mobile layout -------------------------------------------------
-       Below ~640px (phones in portrait), stack table rows into
-       label/value blocks instead of horizontally-squeezed columns (which
-       becomes unreadable once a table has 3+ columns on a ~360px-wide
-       viewport). Any <table> that opts in with class="stack-mobile" gets
-       this treatment; each <td> needs a data-label="..." attribute (shown
-       via ::before) since there's no visible <thead> anymore. */
-    @media (max-width: 640px) {
-      body { margin: 0.75rem auto; padding: 0 0.75rem; }
-      h1 { font-size: 1.25rem; }
-      nav { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; }
-      nav a { margin-right: 0; }
-      .card { padding: 0.9rem; }
-      table.stack-mobile thead { display: none; }
-      table.stack-mobile, table.stack-mobile tbody, table.stack-mobile tr,
-      table.stack-mobile td { display: block; width: 100% !important; }
-      table.stack-mobile tr { border-bottom: 2px solid #e5e5e5; padding: 0.5rem 0; }
-      table.stack-mobile tr:last-child { border-bottom: none; }
-      table.stack-mobile td { border-bottom: none; padding: 0.25rem 0; }
-      table.stack-mobile td[data-label]::before {
-        content: attr(data-label); display: block; font-weight: 600; font-size: 0.72rem;
-        color: #888; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 0.1rem;
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Applied before paint (no flash of the wrong theme). "auto" means no
+    // data-theme attribute at all -- style.css's prefers-color-scheme media
+    // query then takes over. This purely affects this app's own web UI;
+    // it has nothing to do with the actual Google Family Link account.
+    (function () {
+      var theme = "{{ theme|default('auto') }}";
+      if (theme === "light" || theme === "dark") {
+        document.documentElement.setAttribute("data-theme", theme);
       }
-      table.stack-mobile td:empty { display: none; }
-      .btn, button { width: 100%; box-sizing: border-box; text-align: center; }
-    }
-  </style>
+    })();
+  </script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% if setup_completed %}
-  <nav>
-    <a href="/">Status</a>
-    <a href="/history">History</a>
-    <a href="/settings">Settings</a>
+  <nav class="top-nav">
+    <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">
+      <svg class="icon icon-lg"><use href="/static/icons.svg#icon-house"></use></svg>Status
+    </a>
+    <a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">
+      <svg class="icon icon-lg"><use href="/static/icons.svg#icon-list"></use></svg>History
+    </a>
+    <a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
+      <svg class="icon icon-lg"><use href="/static/icons.svg#icon-settings"></use></svg>Settings
+    </a>
+    <button type="button" class="theme-toggle" onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')" title="Toggle light/dark (this browser only until saved in Settings)">
+      <svg class="icon icon-lg"><use href="/static/icons.svg#icon-sun"></use></svg>
+    </button>
   </nav>
   {% endif %}
   {% block content %}{% endblock %}
 </body>
 </html>
+

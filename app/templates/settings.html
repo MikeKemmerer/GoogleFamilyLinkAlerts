@@ -1,89 +1,69 @@
 {% extends "base.html" %}
 {% block title %}Settings — Family Link Alerts{% endblock %}
 {% block content %}
-<h1>Settings</h1>
+<h1><svg class="icon icon-lg"><use href="/static/icons.svg#icon-settings"></use></svg>Settings</h1>
 
 {% if saved %}<div class="flash">Settings saved.</div>{% endif %}
 {% if tz_error %}<div class="flash">Timezone not saved -- that doesn't look like a valid IANA timezone name (e.g. "America/New_York"). Everything else you changed was saved.</div>{% endif %}
 
-<div class="card">
-  <h2>Google account status</h2>
-  <p>
-    familylink-auth:
-    {% if auth_healthy %}<span class="badge badge-ok">reachable</span>{% else %}<span class="badge badge-bad">unreachable</span>{% endif %}
-    &nbsp;·&nbsp;
-    Session:
-    {% if has_cookies %}<span class="badge badge-ok">logged in</span>{% else %}<span class="badge badge-bad">not logged in</span>{% endif %}
-  </p>
-  {% if not has_cookies %}
-    <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
-       &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a></p>
-  {% endif %}
-</div>
+<details class="accordion" open>
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-plug"></use></svg>Connection</summary>
+  <div class="accordion-body">
+    <p>
+      familylink-auth:
+      {% if auth_healthy %}<span class="badge badge-ok">reachable</span>{% else %}<span class="badge badge-bad">unreachable</span>{% endif %}
+      &nbsp;·&nbsp;
+      Session:
+      {% if has_cookies %}<span class="badge badge-ok">logged in</span>{% else %}<span class="badge badge-bad">not logged in</span>{% endif %}
+    </p>
+    {% if not has_cookies %}
+      <p><a class="btn" href="{{ auth_ui_url }}" target="_blank" rel="noopener">1. Start Authentication (familylink-auth)</a>
+         &nbsp;<a class="btn" href="{{ novnc_url }}" target="_blank" rel="noopener">2. Open login screen (noVNC)</a></p>
+    {% endif %}
+  </div>
+</details>
 
-<div class="card">
-  <h2>Children</h2>
-  <table class="stack-mobile">
-    <thead><tr><th>Name</th><th>Monitoring</th><th></th></tr></thead>
-    <tbody>
-    {% for c in children %}
-      <tr>
-        <td data-label="Name">{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }}</td>
-        <td data-label="Monitoring">{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
-        <td>
-          <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
-            <button type="submit">{{ "Disable" if c.enabled else "Enable" }}</button>
-          </form>
-          <form method="post" action="/settings/children/{{ c.id }}/reset-baseline" style="display:inline"
-                onsubmit="return confirm('Reset baseline for {{ c.name }}? The next poll will be treated as a fresh start with no change notifications, and any unsynced changes since the last poll will be silently absorbed into the new baseline.');">
-            <button type="submit">Reset baseline</button>
-          </form>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="3">
-          <details>
-            <summary>Blocked apps ({{ (blocked_apps_by_child.get(c.id) or [])|length }})</summary>
-            {% set rules = blocked_apps_by_child.get(c.id) or [] %}
-            {% if rules %}
-              <table class="stack-mobile">
-                <thead><tr><th>App</th><th>Always blocked</th><th></th></tr></thead>
-                <tbody>
-                {% for r in rules %}
-                  <tr>
-                    <td data-label="App">{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
-                    <td data-label="Always blocked">{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
-                    <td>
-                      <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
-                        <label>
-                          <input type="checkbox" onchange="this.form.requestSubmit()" {% if r.always_blocked %}checked{% endif %}>
-                          Always blocked
-                        </label>
-                      </form>
-                    </td>
-                  </tr>
-                {% endfor %}
-                </tbody>
-              </table>
-              <p class="hint">Checking "Always blocked" means: if this app is ever found enabled on a future
-                 poll (re-enabled by the child, or anyone else), the next poll immediately blocks it again.</p>
-            {% else %}
-              <p class="hint">No apps have been seen blocked for {{ c.name }} yet. Apps show up here the first
-                 time a poll observes them blocked in Family Link.</p>
-            {% endif %}
-          </details>
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  <p class="hint">"Reset baseline" clears the stored snapshot for a child so the next poll starts fresh
-     without generating change alerts -- handy after a big batch of manual changes you don't want notified about.</p>
-</div>
+<!-- Children enable/disable and reset-baseline each POST to their own
+     dedicated endpoint immediately, independent of the Save-everything
+     form further down, so this section has no wrapping <form>. -->
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-users"></use></svg>Children</summary>
+  <div class="accordion-body">
+    <table class="stack-mobile">
+      <thead><tr><th>Name</th><th>Monitoring</th><th></th></tr></thead>
+      <tbody>
+      {% for c in children %}
+        <tr>
+          <td data-label="Name">{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }}</td>
+          <td data-label="Monitoring">{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
+          <td>
+            <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
+              <button type="submit">{{ "Disable" if c.enabled else "Enable" }}</button>
+            </form>
+            <form method="post" action="/settings/children/{{ c.id }}/reset-baseline" style="display:inline"
+                  onsubmit="return confirm('Reset baseline for {{ c.name }}? The next poll will be treated as a fresh start with no change notifications, and any unsynced changes since the last poll will be silently absorbed into the new baseline.');">
+              <button type="submit">Reset baseline</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="hint">"Reset baseline" clears the stored snapshot for a child so the next poll starts fresh
+       without generating change alerts -- handy after a big batch of manual changes you don't want notified about.</p>
+  </div>
+</details>
 
-<div class="card">
-  <h2>Alerts &amp; polling</h2>
-  <form method="post" action="/settings">
+<!-- One form wraps the Notifications/Polling/Display sections so a single
+     "Save" submits everything together (matches the single POST
+     /settings handler, which expects all these fields at once) -- the
+     accordions are purely a visual/organizational grouping, not separate
+     forms. -->
+<form method="post" action="/settings">
+
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-bell"></use></svg>Notifications</summary>
+  <div class="accordion-body">
     <label for="notifications_enabled">
       <input type="checkbox" id="notifications_enabled" name="notifications_enabled" {% if notifications_enabled %}checked{% endif %}>
       Notifications enabled
@@ -104,22 +84,92 @@
     <input type="url" id="ntfy_server" name="ntfy_server" value="{{ ntfy_server }}" required>
     <label for="ntfy_topic">ntfy topic</label>
     <input type="text" id="ntfy_topic" name="ntfy_topic" value="{{ ntfy_topic }}" required>
+  </div>
+</details>
+
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-refresh-cw"></use></svg>Polling</summary>
+  <div class="accordion-body">
     <label for="poll_interval_minutes">Poll interval (minutes)</label>
     <input type="number" id="poll_interval_minutes" name="poll_interval_minutes" min="5" value="{{ poll_interval_minutes }}" required>
+  </div>
+</details>
 
+<details class="accordion" open>
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-globe"></use></svg>Display</summary>
+  <div class="accordion-body">
     <label for="timezone">Timezone (for display only)</label>
-    <input type="text" id="timezone" name="timezone" value="{{ timezone }}" list="timezone-options" autocomplete="off">
-    <datalist id="timezone-options">
-      {% for tz_name in timezone_options %}<option value="{{ tz_name }}">{% endfor %}
-    </datalist>
-    <p class="hint">An IANA timezone name (e.g. "America/New_York", "Europe/London") used only to display
-       dates/times in this app and to evaluate Family Link's bedtime/school-time schedules, which are
-       configured by local time-of-day. This never changes anything in your actual Google Family Link
-       account -- it only affects how this app reads and shows the times it already sees.</p>
+    <select id="timezone" name="timezone" onchange="document.getElementById('timezone_other_wrap').style.display = this.value === '__other__' ? 'block' : 'none'">
+      {% for group_label, zone_names in timezone_groups %}
+        <optgroup label="{{ group_label }}">
+          {% for tz_name in zone_names %}
+            <option value="{{ tz_name }}" {% if tz_name == timezone %}selected{% endif %}>{{ tz_name }}</option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+      <option value="__other__">Other... (enter manually)</option>
+    </select>
+    <div id="timezone_other_wrap" style="display:none">
+      <label for="timezone_other">Custom IANA timezone name</label>
+      <input type="text" id="timezone_other" name="timezone_other" placeholder="e.g. America/Indiana/Knox">
+    </div>
+    <p class="hint">Used only to display dates/times in this app and to evaluate Family Link's bedtime/school-time
+       schedules, which are configured by local time-of-day. This never changes anything in your actual Google
+       Family Link account -- it only affects how this app reads and shows the times it already sees.</p>
 
-    <button type="submit">Save</button>
-  </form>
-</div>
+    <label>Theme</label>
+    <div class="pill-toggle">
+      <label><input type="radio" name="theme" value="auto" {% if theme == "auto" %}checked{% endif %}><span>Auto</span></label>
+      <label><input type="radio" name="theme" value="light" {% if theme == "light" %}checked{% endif %}><span><svg class="icon"><use href="/static/icons.svg#icon-sun"></use></svg>Light</span></label>
+      <label><input type="radio" name="theme" value="dark" {% if theme == "dark" %}checked{% endif %}><span><svg class="icon"><use href="/static/icons.svg#icon-moon"></use></svg>Dark</span></label>
+    </div>
+    <p class="hint">"Auto" follows your browser/OS light-dark setting. This only affects how this app looks in
+       your browser -- it's unrelated to Family Link.</p>
+  </div>
+</details>
+
+<button type="submit">Save</button>
+</form>
+
+<!-- Always-blocked toggles POST immediately to their own endpoint, so
+     this section also stays outside the Save-everything form above. -->
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-ban"></use></svg>App Rules — Always-blocked apps</summary>
+  <div class="accordion-body">
+    {% for c in children %}
+      <details style="margin-top: 0.6rem;">
+        <summary>{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }} -- blocked apps ({{ (blocked_apps_by_child.get(c.id) or [])|length }})</summary>
+        {% set rules = blocked_apps_by_child.get(c.id) or [] %}
+        {% if rules %}
+          <table class="stack-mobile">
+            <thead><tr><th>App</th><th>Always blocked</th><th></th></tr></thead>
+            <tbody>
+            {% for r in rules %}
+              <tr>
+                <td data-label="App">{% if r.icon_url %}<img class="app-icon-sm" src="{{ r.icon_url }}" alt="">{% endif %}{{ r.title }}</td>
+                <td data-label="Always blocked">{% if r.always_blocked %}<span class="badge badge-ok">enforced</span>{% else %}<span class="badge">no</span>{% endif %}</td>
+                <td>
+                  <form method="post" action="/settings/children/{{ c.id }}/apps/{{ r.package_name }}/toggle-always-blocked" style="display:inline">
+                    <label>
+                      <input type="checkbox" onchange="this.form.requestSubmit()" {% if r.always_blocked %}checked{% endif %}>
+                      Always blocked
+                    </label>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+          <p class="hint">Checking "Always blocked" means: if this app is ever found enabled on a future
+             poll (re-enabled by the child, or anyone else), the next poll immediately blocks it again.</p>
+        {% else %}
+          <p class="hint">No apps have been seen blocked for {{ c.name }} yet. Apps show up here the first
+             time a poll observes them blocked in Family Link.</p>
+        {% endif %}
+      </details>
+    {% endfor %}
+  </div>
+</details>
 
 <p class="muted">
   Family Link Alerts v{{ app_version }} ·

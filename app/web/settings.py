@@ -1,8 +1,6 @@
 """Ongoing settings page: ntfy config, poll interval, per-child enable/disable."""
 from __future__ import annotations
 
-from zoneinfo import available_timezones
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
@@ -49,7 +47,8 @@ async def settings_get(request: Request, session: Session = Depends(get_db), sav
         "notification_categories": CATEGORIES,
         "enabled_notification_categories": settings_store.get_enabled_notification_categories(session),
         "timezone": settings_store.get_timezone(session),
-        "timezone_options": sorted(available_timezones()),
+        "timezone_groups": settings_store.get_timezone_options(session),
+        "theme": settings_store.get_theme(session),
         "app_version": __version__,
     })
 
@@ -62,12 +61,20 @@ async def settings_post(request: Request, session: Session = Depends(get_db)):
     poll_interval_minutes = int(form.get("poll_interval_minutes", 20))
     notifications_enabled = form.get("notifications_enabled") is not None
     enabled_categories = {key for key in CATEGORIES if form.get(f"category_{key}") is not None}
-    timezone_input = form.get("timezone", "").strip()
+    # The dropdown's "Other..." option switches to a free-text sibling
+    # field (timezone_other) instead of submitting a made-up <option>
+    # value, so a custom zone name is only ever read from there.
+    timezone_selected = form.get("timezone", "").strip()
+    timezone_input = form.get("timezone_other", "").strip() if timezone_selected == "__other__" else timezone_selected
+    theme_input = form.get("theme", "").strip()
 
     settings_store.set_ntfy_config(session, ntfy_server, ntfy_topic)
     settings_store.set_poll_interval_minutes(session, poll_interval_minutes)
     settings_store.set_notifications_enabled(session, notifications_enabled)
     settings_store.set_enabled_notification_categories(session, enabled_categories)
+
+    if theme_input in settings_store.VALID_THEMES:
+        settings_store.set_theme(session, theme_input)
 
     tz_error = False
     if timezone_input:

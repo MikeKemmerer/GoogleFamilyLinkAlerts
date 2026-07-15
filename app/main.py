@@ -9,7 +9,10 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from .db.migrate import run_migrations
 from .poller import start_scheduler
@@ -29,6 +32,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Family Link Alerts", lifespan=lifespan)
+
+# Self-hosted static assets (theme CSS, Lucide icon sprite, Space Grotesk
+# font) -- no third-party CDN, so nothing about a user's browsing ever
+# leaks to an external asset host.
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 app.include_router(status.router)
 app.include_router(setup.router)
