@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Added a favicon (self-hosted SVG, reuses the shield logo) so the browser
+  tab/bookmark icon isn't the generic blank-page icon.
+- History page: the Detected changes table is now paginated (50 per page,
+  Newer/Older navigation) instead of hard-capping at the most recent 200
+  events with no way to see older ones. The child filter is preserved
+  across pages.
 - Fixed a theme-persistence bug: the saved Light/Dark/Auto theme (set on the
   Settings page) previously only actually applied on the Settings page
   itself -- every other page (Status, History, first-run setup) silently

@@ -13,9 +13,11 @@
       <option value="{{ c.id }}" {% if c.id == selected_child_id %}selected{% endif %}>{{ c.name }}</option>
     {% endfor %}
   </select>
+  <!-- Changing the filter always jumps back to page 1 -- otherwise
+       filtering could land you on a now out-of-range page number. -->
+  <input type="hidden" name="page" value="1">
 </form>
 {% endif %}
-
 {% if child_names %}
 <p class="muted">
   Last successful poll —
@@ -86,6 +88,17 @@
     {% endfor %}
     </tbody>
   </table>
+  {% endif %}
+  {% if total_pages and total_pages > 1 %}
+  <nav class="pagination" aria-label="History pages">
+    <a class="btn {% if page <= 1 %}btn-disabled{% endif %}"
+       href="?page={{ page - 1 }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}"
+       {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>&larr; Newer</a>
+    <span class="muted">Page {{ page }} of {{ total_pages }} &middot; {{ total_events }} total changes</span>
+    <a class="btn {% if page >= total_pages %}btn-disabled{% endif %}"
+       href="?page={{ page + 1 }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}"
+       {% if page >= total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>Older &rarr;</a>
+  </nav>
   {% endif %}
 </div>
 {% endblock %}

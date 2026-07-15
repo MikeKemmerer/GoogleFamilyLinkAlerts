@@ -141,6 +141,16 @@ button, .btn {
 }
 button:hover, .btn:hover { background: var(--accent-hover); }
 
+/* History page's pagination bar (below the Detected changes table). */
+.pagination {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  margin-top: 1rem; flex-wrap: wrap;
+}
+.pagination .btn { margin-top: 0; }
+.pagination .btn-disabled {
+  background: var(--surface-alt); color: var(--text-muted); cursor: default; pointer-events: none;
+}
+
 /* Segmented pill toggle (used for the theme picker). */
 .pill-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; margin-top: 0.4rem; }
 .pill-toggle label { margin: 0; font-weight: 500; }

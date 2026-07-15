@@ -335,6 +335,34 @@ def test_history_page_filters_by_child(client, engine):
     assert "apps.roblox.blocked" in resp_all.text
 
 
+def test_history_page_paginates_events(client, engine):
+    from app.web.history import _PAGE_SIZE
+
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo"))
+        for i in range(_PAGE_SIZE + 5):
+            s.add(ChangeEvent(child_id="child1", field_path=f"apps.app{i}.blocked", old_value=False, new_value=True))
+        s.commit()
+
+    resp = client.get("/history")
+    assert resp.status_code == 200
+    # Newest 50 (app{54} down to app{5}) on page 1; oldest 5 pushed to page 2.
+    assert "apps.app4.blocked" not in resp.text
+    assert "apps.app5.blocked" in resp.text
+    assert "Page 1 of 2" in resp.text
+    assert "55 total changes" in resp.text
+
+    resp_p2 = client.get("/history", params={"page": 2})
+    assert "apps.app4.blocked" in resp_p2.text
+    assert "apps.app5.blocked" not in resp_p2.text
+    assert "Page 2 of 2" in resp_p2.text
+
+    # A page number beyond the last real page clamps back to the last page
+    # instead of rendering an empty table.
+    resp_over = client.get("/history", params={"page": 99})
+    assert "Page 2 of 2" in resp_over.text
+
+
 def test_toggle_theme_cycles_and_persists(client, engine):
     from app.db import settings_store
 

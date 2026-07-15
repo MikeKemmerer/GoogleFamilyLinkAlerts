@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
 from ..db import settings_store
 from ..db.models import AppRule, Child, ChangeEvent, LatestSnapshot, PollFailure
@@ -21,6 +21,11 @@ from ..notify.categories import category_for_field_path
 from .deps import get_db, last_poll_times, render, to_local
 
 router = APIRouter()
+
+# Detected-changes list page size. Kept fairly generous since each row is a
+# single line (collapsed) -- most reading happens on page 1 anyway, this
+# just keeps very long histories from turning into one giant table.
+_PAGE_SIZE = 50
 
 # Maps each notification category (app.notify.categories.CATEGORIES) to a
 # self-hosted Lucide icon id (see app/static/icons.svg) shown next to each
@@ -51,13 +56,23 @@ def _raw_display(value: Any) -> str:
 
 
 @router.get("/history")
-async def history(request: Request, session: Session = Depends(get_db), child_id: str = ""):
-    events_query = select(ChangeEvent).order_by(ChangeEvent.detected_at.desc()).limit(200)
+async def history(request: Request, session: Session = Depends(get_db), child_id: str = "", page: int = 1):
+    page = max(page, 1)
+
+    count_query = select(func.count()).select_from(ChangeEvent)
     if child_id:
-        # Filter first, then apply the same limit -- otherwise a child with
-        # few recent changes could be crowded out of the newest 200 rows by
-        # other children's changes before we ever get to filter by child.
-        events_query = select(ChangeEvent).where(ChangeEvent.child_id == child_id).order_by(ChangeEvent.detected_at.desc()).limit(200)
+        count_query = count_query.where(ChangeEvent.child_id == child_id)
+    total_events = session.exec(count_query).one()
+    total_pages = max((total_events + _PAGE_SIZE - 1) // _PAGE_SIZE, 1)
+    # Clamp a too-high page (e.g. a stale bookmark after events were pruned)
+    # back onto the last real page instead of silently rendering an empty
+    # table with no indication anything went wrong.
+    page = min(page, total_pages)
+
+    events_query = select(ChangeEvent).order_by(ChangeEvent.detected_at.desc())
+    if child_id:
+        events_query = events_query.where(ChangeEvent.child_id == child_id)
+    events_query = events_query.offset((page - 1) * _PAGE_SIZE).limit(_PAGE_SIZE)
     events = session.exec(events_query).all()
     failures = session.exec(select(PollFailure).order_by(PollFailure.occurred_at.desc()).limit(50)).all()
     children = session.exec(select(Child)).all()
@@ -140,4 +155,7 @@ async def history(request: Request, session: Session = Depends(get_db), child_id
         "child_names": child_names,
         "child_avatars": child_avatars,
         "last_poll_by_child": last_poll_by_child,
+        "page": page,
+        "total_pages": total_pages,
+        "total_events": total_events,
     })
