@@ -23,6 +23,9 @@ _KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
 _KEY_ENABLED_NOTIFICATION_CATEGORIES = "enabled_notification_categories"
 _KEY_TIMEZONE = "timezone"
 _KEY_THEME = "theme"
+_KEY_AUTH_ENABLED = "auth_enabled"
+_KEY_GUEST_VIEW_ENABLED = "guest_view_enabled"
+_KEY_SESSION_SECRET = "session_secret"
 
 VALID_THEMES = ("auto", "light", "dark")
 DEFAULT_THEME = "auto"
@@ -204,3 +207,49 @@ def set_theme(session: Session, theme: str) -> None:
 def all_enabled_children(session: Session):
     from .models import Child
     return session.exec(select(Child).where(Child.enabled == True)).all()  # noqa: E712
+
+
+def get_auth_enabled(session: Session) -> bool:
+    """Whether this app's own login system is turned on (default: off, so
+    upgrading never locks out an existing install -- see app/web/auth.py
+    and app/web/deps.py:require_role for what changes when this is True).
+    """
+    return get(session, _KEY_AUTH_ENABLED) == "true"
+
+
+def set_auth_enabled(session: Session, enabled: bool) -> None:
+    set_(session, _KEY_AUTH_ENABLED, "true" if enabled else "false")
+
+
+def get_guest_view_enabled(session: Session) -> bool:
+    """Whether the no-password "Continue as guest" login option is offered.
+
+    Only has any effect when auth is also enabled. What a guest can
+    actually see is controlled separately, per-category, via
+    app/web/guest_permissions.py -- this flag only controls whether the
+    guest login option exists at all.
+    """
+    return get(session, _KEY_GUEST_VIEW_ENABLED) == "true"
+
+
+def set_guest_view_enabled(session: Session, enabled: bool) -> None:
+    set_(session, _KEY_GUEST_VIEW_ENABLED, "true" if enabled else "false")
+
+
+def get_or_create_session_secret(session: Session) -> str:
+    """The signing key for this app's own login session cookie.
+
+    Generated once (on first use) and persisted in the same SQLite database
+    as everything else, rather than a separate file -- simplest option for
+    a single-container app, and it naturally survives container
+    recreation via the existing data/ volume mount. Never rotated
+    automatically: rotating would immediately invalidate every existing
+    login session.
+    """
+    import secrets
+    existing = get(session, _KEY_SESSION_SECRET)
+    if existing:
+        return existing
+    new_secret = secrets.token_hex(32)
+    set_(session, _KEY_SESSION_SECRET, new_secret)
+    return new_secret

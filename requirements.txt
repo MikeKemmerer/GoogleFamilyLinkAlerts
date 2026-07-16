@@ -7,3 +7,5 @@ alembic==1.18.5
 httpx==0.28.1
 apscheduler==3.11.3
 pydantic-settings==2.14.2
+bcrypt==5.0.0
+itsdangerous==2.2.0

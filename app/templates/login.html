@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Log in — Family Link Alerts{% endblock %}
+{% block content %}
+<h1>Family Link Alerts</h1>
+<div class="card">
+  <h2>Log in</h2>
+  {% if error %}<p class="flash">Invalid username or password.</p>{% endif %}
+  <form method="post" action="/login">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" autocomplete="current-password" required>
+    <button type="submit">Log in</button>
+  </form>
+  {% if guest_view_enabled %}
+    <p><a class="btn" href="/login/guest">Continue as guest</a></p>
+  {% endif %}
+</div>
+{% endblock %}

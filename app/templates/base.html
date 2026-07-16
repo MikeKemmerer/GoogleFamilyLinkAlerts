@@ -34,9 +34,25 @@
     <a href="/history" class="{% if request.url.path == '/history' %}active{% endif %}">
       <svg class="icon icon-lg"><use href="/static/icons.svg#icon-list"></use></svg>History
     </a>
+    {% if not auth_enabled or (current_user and current_user.role in ('admin', 'contributor')) %}
     <a href="/settings" class="{% if request.url.path == '/settings' %}active{% endif %}">
       <svg class="icon icon-lg"><use href="/static/icons.svg#icon-settings"></use></svg>Settings
     </a>
+    {% endif %}
+    {% if auth_enabled %}
+      {% if is_guest %}
+        <span class="nav-account"><svg class="icon"><use href="/static/icons.svg#icon-user"></use></svg>Guest</span>
+      {% elif current_user %}
+        <a href="/account" class="nav-account" title="My preferences"><svg class="icon"><use href="/static/icons.svg#icon-user"></use></svg>{{ current_user.username }} <span class="badge">{{ current_user.role }}</span></a>
+      {% endif %}
+      {% if is_guest or current_user %}
+      <form method="post" action="/logout" class="theme-toggle-form">
+        <button type="submit" class="theme-toggle" title="Log out">
+          <svg class="icon icon-lg"><use href="/static/icons.svg#icon-log-out"></use></svg>
+        </button>
+      </form>
+      {% endif %}
+    {% endif %}
     <form method="post" action="/toggle-theme" class="theme-toggle-form">
       <input type="hidden" name="next" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
       <button type="submit" class="theme-toggle" title="Theme: {{ theme|default('auto')|capitalize }} (click to change)">

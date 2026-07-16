@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}My preferences — Family Link Alerts{% endblock %}
+{% block content %}
+<h1>My preferences</h1>
+{% if request.query_params.get('saved') %}<div class="flash">Preferences saved.</div>{% endif %}
+<div class="card">
+  <p class="muted">These only affect how this app looks and displays times for your own account -- they never
+     change anything in your actual Google Family Link account, and don't affect other users.</p>
+  <form method="post" action="/account">
+    <label for="timezone">My timezone (for display only)</label>
+    <select id="timezone" name="timezone" onchange="document.getElementById('timezone_other_wrap').style.display = this.value === '__other__' ? 'block' : 'none'">
+      <option value="">Use the site default</option>
+      {% for group_label, zone_names in timezone_groups %}
+        <optgroup label="{{ group_label }}">
+          {% for tz_name in zone_names %}
+            <option value="{{ tz_name }}" {% if tz_name == user_timezone %}selected{% endif %}>{{ tz_name }}</option>
+          {% endfor %}
+        </optgroup>
+      {% endfor %}
+      <option value="__other__">Other... (enter manually)</option>
+    </select>
+    <div id="timezone_other_wrap" style="display:none">
+      <label for="timezone_other">Custom IANA timezone name</label>
+      <input type="text" id="timezone_other" name="timezone_other" placeholder="e.g. America/Indiana/Knox">
+    </div>
+
+    <label>My theme</label>
+    <div class="pill-toggle">
+      <label><input type="radio" name="theme" value="" {% if not user_theme %}checked{% endif %}><span>Use the site default</span></label>
+      <label><input type="radio" name="theme" value="auto" {% if user_theme == "auto" %}checked{% endif %}><span>Auto</span></label>
+      <label><input type="radio" name="theme" value="light" {% if user_theme == "light" %}checked{% endif %}><span><svg class="icon"><use href="/static/icons.svg#icon-sun"></use></svg>Light</span></label>
+      <label><input type="radio" name="theme" value="dark" {% if user_theme == "dark" %}checked{% endif %}><span><svg class="icon"><use href="/static/icons.svg#icon-moon"></use></svg>Dark</span></label>
+    </div>
+    <button type="submit">Save</button>
+  </form>
+</div>
+{% endblock %}

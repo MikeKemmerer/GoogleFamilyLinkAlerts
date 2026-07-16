@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import Column
 from sqlalchemy.types import JSON
@@ -106,3 +107,62 @@ class AppSetting(SQLModel, table=True):
 
     key: str = Field(primary_key=True)
     value: str
+
+
+# Fixed, coarse account roles -- see app/web/auth.py and app/web/deps.py for
+# the actual permission checks. Ordered weakest-to-strongest; a numeric
+# ranking of these lives alongside require_role() in app/web/deps.py.
+ROLE_VIEWER = "viewer"
+ROLE_CONTRIBUTOR = "contributor"
+ROLE_ADMIN = "admin"
+VALID_ROLES = (ROLE_VIEWER, ROLE_CONTRIBUTOR, ROLE_ADMIN)
+
+
+class User(SQLModel, table=True):
+    """A logged-in account for this app's own web UI (unrelated to the
+    Google account(s) being monitored).
+
+    Only created/used once an admin turns on the optional `auth_enabled`
+    setting (see app/db/settings_store.py) -- this table can be completely
+    empty on an install that never enables auth, in which case every page
+    behaves exactly as before this feature existed (see
+    app/web/deps.py:require_role).
+
+    `timezone`/`theme` are per-user overrides of the app-wide display
+    timezone/theme (app/db/settings_store.py:get_timezone/get_theme) -- NULL
+    means "use the global default", so a user who's never touched their own
+    preference isn't stuck on some arbitrary value.
+    """
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, description="Random UUID, not a Google account ID")
+    username: str = Field(unique=True, index=True)
+    password_hash: str
+    role: str = Field(default=ROLE_VIEWER, description="One of VALID_ROLES")
+    timezone: str | None = Field(default=None, description="Per-user display timezone override; falls back to the global setting when unset")
+    theme: str | None = Field(default=None, description="Per-user theme override ('auto'/'light'/'dark'); falls back to the global setting when unset")
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+class GuestPermission(SQLModel, table=True):
+    """A single granular on/off toggle controlling what the (optional)
+    no-password "Continue as guest" session is allowed to see.
+
+    Deliberately a flexible key/value table (one row per toggle) rather than
+    fixed columns, so new guest-visible categories can be added later as
+    plain rows/migrations-free inserts instead of a schema migration each
+    time -- mirrors the AppSetting key/value pattern above. Only an admin
+    can edit these (see app/web/settings.py); everything defaults to
+    disabled (row absent == False) when guest mode is first turned on, so a
+    guest sees nothing until an admin deliberately opts categories in.
+
+    `category` values in use (see app/web/guest_permissions.py for the
+    canonical list + labels):
+      - "page:status", "page:history" -- whether the whole page is visible
+      - "child:<child_id>" -- whether a specific child's data is visible
+      - "data:screen_time", "data:bonus_time", "data:app_blocking",
+        "data:bedtime_schooltime", "data:location", "data:battery"
+      - "history:show_actor", "history:full_pagination"
+    """
+
+    category: str = Field(primary_key=True)
+    enabled: bool = Field(default=False)

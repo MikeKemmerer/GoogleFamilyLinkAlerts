@@ -6,6 +6,7 @@
 {% if saved %}<div class="flash">Settings saved.</div>{% endif %}
 {% if tz_error %}<div class="flash">Timezone not saved -- that doesn't look like a valid IANA timezone name (e.g. "America/New_York"). Everything else you changed was saved.</div>{% endif %}
 
+{% if is_admin %}
 <details class="accordion" open>
   <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-plug"></use></svg>Connection</summary>
   <div class="accordion-body">
@@ -22,6 +23,7 @@
     {% endif %}
   </div>
 </details>
+{% endif %}
 
 <!-- Children enable/disable and reset-baseline each POST to their own
      dedicated endpoint immediately, independent of the Save-everything
@@ -103,6 +105,7 @@
   </div>
 </details>
 
+{% if is_admin %}
 <!-- One form wraps the Notifications/Polling/Display sections so a single
      "Save" submits everything together (matches the single POST
      /settings handler, which expects all these fields at once) -- the
@@ -179,6 +182,98 @@
 
 <button type="submit">Save</button>
 </form>
+{% endif %}
+
+{% if is_admin %}
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-key"></use></svg>Access &amp; Users</summary>
+  <div class="accordion-body">
+    {% if not access_auth_enabled %}
+      <p class="hint">Login is currently <strong>off</strong> -- anyone who can reach this app can view and change
+         everything. Enable login to require a username/password and optionally allow a limited, view-only guest
+         mode.</p>
+      <p><a class="btn" href="/settings/access/setup-admin">Enable login &amp; create admin account</a></p>
+    {% else %}
+      <p>Login: <span class="badge badge-ok">enabled</span>
+        <form method="post" action="/settings/access/disable" style="display:inline"
+              onsubmit="return confirm('Turn off login? Everyone will be able to view and change everything without signing in. Existing accounts are kept, so you can turn this back on later without recreating them.');">
+          <button type="submit">Disable login</button>
+        </form>
+      </p>
+
+      <h3>Users</h3>
+      <table class="stack-mobile">
+        <thead><tr><th>Username</th><th>Role</th><th></th></tr></thead>
+        <tbody>
+        {% for u in access_users %}
+          <tr>
+            <td data-label="Username">{{ u.username }}</td>
+            <td data-label="Role"><span class="badge">{{ u.role }}</span></td>
+            <td>
+              <form method="post" action="/settings/access/users/{{ u.id }}/delete" style="display:inline"
+                    onsubmit="return confirm('Delete user {{ u.username }}?');">
+                <button type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <p class="hint">Contributor: can manage Children and App Rules only. Viewer: read-only access to Status and History.</p>
+
+      <details style="margin-top: 0.6rem;">
+        <summary>Add a user</summary>
+        <form method="post" action="/settings/access/users">
+          <label for="new_username">Username</label>
+          <input type="text" id="new_username" name="username" autocomplete="off" required>
+          <label for="new_password">Password</label>
+          <input type="password" id="new_password" name="password" autocomplete="new-password" required maxlength="72">
+          <label for="new_role">Role</label>
+          <select id="new_role" name="role">
+            <option value="viewer">Viewer</option>
+            <option value="contributor">Contributor</option>
+            <option value="admin">Admin</option>
+          </select>
+          <button type="submit">Create user</button>
+        </form>
+      </details>
+
+      <h3 style="margin-top: 1rem;">Guest access</h3>
+      <form method="post" action="/settings/access/guest-view/toggle" style="display:inline">
+        <label>
+          <input type="checkbox" onchange="this.form.requestSubmit()" {% if access_guest_view_enabled %}checked{% endif %}>
+          Allow "Continue as guest" on the login page (no password required)
+        </label>
+      </form>
+
+      {% if access_guest_view_enabled %}
+        <p class="hint">Everything below defaults to hidden. Only check what you deliberately want a guest to see --
+           this is the only place these settings can be changed, and only an admin can see this panel.</p>
+        <form method="post" action="/settings/access/guest-permissions">
+          <label>Pages &amp; data guests may see</label>
+          {% for key, label, help in guest_categories %}
+            <label style="font-weight: normal; margin-top: 0.35rem;" title="{{ help }}">
+              <input type="checkbox" name="{{ key }}" {% if guest_permissions.get(key) %}checked{% endif %}>
+              {{ label }}
+            </label>
+          {% endfor %}
+
+          {% if guest_child_categories %}
+            <label style="margin-top: 0.6rem;">Which children guests may see</label>
+            {% for key, child_name in guest_child_categories %}
+              <label style="font-weight: normal; margin-top: 0.35rem;">
+                <input type="checkbox" name="{{ key }}" {% if guest_permissions.get(key) %}checked{% endif %}>
+                {{ child_name }}
+              </label>
+            {% endfor %}
+          {% endif %}
+          <button type="submit" style="margin-top: 0.6rem;">Save guest visibility</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</details>
+{% endif %}
 
 <p class="muted">
   Family Link Alerts v{{ app_version }} ·

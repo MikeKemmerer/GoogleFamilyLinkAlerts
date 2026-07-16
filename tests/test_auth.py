@@ -1,0 +1,261 @@
+"""Tests for this app's own optional login system: password hashing, the
+login/logout/guest routes, role-gating (require_role/require_page_access),
+and granular guest-visibility filtering on Status/History.
+
+Uses its own TestClient fixture (rather than tests/test_web.py's) because
+these tests need Starlette's SessionMiddleware installed, which the other
+web tests deliberately don't need.
+"""
+from __future__ import annotations
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
+from starlette.middleware.sessions import SessionMiddleware
+
+from app import security
+from app.db import settings_store
+from app.db.models import Child, User
+from app.web import auth, guest_permissions, history, settings as settings_web, status
+from app.web.deps import get_db
+
+
+@pytest.fixture
+def engine():
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    SQLModel.metadata.create_all(eng)
+    return eng
+
+
+class FakeAuthClient:
+    async def health_ok(self):
+        return False
+
+    async def get_cookies(self):
+        return None
+
+
+@pytest.fixture
+def client(engine, monkeypatch):
+    app = FastAPI()
+    app.add_middleware(SessionMiddleware, secret_key="test-secret", session_cookie="fla_session")
+    app.include_router(status.router)
+    app.include_router(settings_web.router)
+    app.include_router(history.router)
+    app.include_router(auth.router)
+
+    def override_get_db():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient())
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient())
+
+    with Session(engine) as session:
+        settings_store.mark_setup_completed(session)
+        session.commit()
+
+    return TestClient(app, follow_redirects=False)
+
+
+def make_admin(engine, username="admin", password="hunter2pass"):
+    with Session(engine) as session:
+        settings_store.set_auth_enabled(session, True)
+        user = User(username=username, password_hash=security.hash_password(password), role="admin")
+        session.add(user)
+        session.commit()
+        return user.id
+
+
+def make_user(engine, username, password, role):
+    with Session(engine) as session:
+        user = User(username=username, password_hash=security.hash_password(password), role=role)
+        session.add(user)
+        session.commit()
+        return user.id
+
+
+# --- password hashing ----------------------------------------------------
+
+def test_hash_and_verify_round_trip():
+    hashed = security.hash_password("correct-password")
+    assert security.verify_password("correct-password", hashed)
+    assert not security.verify_password("wrong-password", hashed)
+
+
+def test_hash_password_rejects_empty():
+    with pytest.raises(ValueError):
+        security.hash_password("")
+
+
+def test_hash_password_rejects_too_long():
+    with pytest.raises(ValueError):
+        security.hash_password("x" * 73)
+
+
+# --- login/logout/guest ----------------------------------------------------
+
+def test_settings_reachable_without_login_when_auth_disabled(client):
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+
+
+def test_login_page_redirects_home_when_auth_disabled(client):
+    resp = client.get("/login")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+
+
+def test_login_success_and_failure(client, engine):
+    make_admin(engine)
+    bad = client.post("/login", data={"username": "admin", "password": "wrong"})
+    assert bad.status_code == 303
+    assert "error=true" in bad.headers["location"]
+
+    good = client.post("/login", data={"username": "admin", "password": "hunter2pass"})
+    assert good.status_code == 303
+    assert good.headers["location"] == "/"
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+
+
+def test_logout_clears_session(client, engine):
+    make_admin(engine)
+    client.post("/login", data={"username": "admin", "password": "hunter2pass"})
+    client.post("/logout")
+    resp = client.get("/settings")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+
+def test_settings_redirects_to_login_when_auth_enabled_and_not_logged_in(client, engine):
+    make_admin(engine)
+    resp = client.get("/settings")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+
+def test_guest_login_requires_guest_view_enabled(client, engine):
+    make_admin(engine)
+    resp = client.get("/login/guest")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+    with Session(engine) as session:
+        settings_store.set_guest_view_enabled(session, True)
+    resp = client.get("/login/guest")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/"
+
+
+# --- role gating -----------------------------------------------------------
+
+def test_contributor_can_toggle_child_but_not_post_global_settings(client, engine):
+    make_admin(engine)
+    make_user(engine, "contrib", "contribpass123", "contributor")
+    with Session(engine) as session:
+        session.add(Child(id="c1", name="Kid", enabled=True))
+        session.commit()
+
+    client.post("/login", data={"username": "contrib", "password": "contribpass123"})
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "Access &amp; Users" not in resp.text
+    assert "Connection" not in resp.text
+
+    resp = client.post("/settings/children/c1/toggle")
+    assert resp.status_code == 303
+
+    resp = client.post("/settings", data={"ntfy_server": "https://x", "ntfy_topic": "t", "poll_interval_minutes": "20"})
+    assert resp.status_code == 403
+
+
+def test_viewer_cannot_reach_settings(client, engine):
+    make_admin(engine)
+    make_user(engine, "viewer1", "viewerpass123", "viewer")
+    client.post("/login", data={"username": "viewer1", "password": "viewerpass123"})
+    resp = client.get("/settings")
+    assert resp.status_code == 403
+
+
+def test_viewer_can_reach_status_and_history(client, engine):
+    make_admin(engine)
+    make_user(engine, "viewer1", "viewerpass123", "viewer")
+    client.post("/login", data={"username": "viewer1", "password": "viewerpass123"})
+    assert client.get("/").status_code == 200
+    assert client.get("/history").status_code == 200
+
+
+# --- guest permission gating ------------------------------------------------
+
+def test_guest_blocked_from_pages_with_no_permissions_granted(client, engine):
+    make_admin(engine)
+    with Session(engine) as session:
+        settings_store.set_guest_view_enabled(session, True)
+    client.get("/login/guest")
+
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+    resp = client.get("/history", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+
+def test_guest_sees_only_permitted_children_on_status_page(client, engine):
+    make_admin(engine)
+    with Session(engine) as session:
+        session.add(Child(id="c1", name="Alice", enabled=True))
+        session.add(Child(id="c2", name="Bob", enabled=True))
+        settings_store.set_guest_view_enabled(session, True)
+        guest_permissions.set_guest_permissions(session, {"page:status", "child:c1"})
+
+    client.get("/login/guest")
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Alice" in resp.text
+    assert "Bob" not in resp.text
+
+
+def test_guest_page_history_toggle_gates_history_independently(client, engine):
+    make_admin(engine)
+    with Session(engine) as session:
+        settings_store.set_guest_view_enabled(session, True)
+        guest_permissions.set_guest_permissions(session, {"page:status"})
+
+    client.get("/login/guest")
+    assert client.get("/", follow_redirects=False).status_code == 200
+    resp = client.get("/history", follow_redirects=False)
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
+
+
+def test_setup_admin_flow_enables_auth_and_logs_in(client, engine):
+    with Session(engine) as session:
+        assert settings_store.get_auth_enabled(session) is False
+
+    resp = client.post("/settings/access/setup-admin", data={"username": "admin", "password": "hunter2pass"})
+    assert resp.status_code == 303
+
+    with Session(engine) as session:
+        assert settings_store.get_auth_enabled(session) is True
+
+    # The setup flow should have logged the new admin straight in.
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "Access &amp; Users" in resp.text
+
+
+def test_cannot_delete_last_admin(client, engine):
+    admin_id = make_admin(engine)
+    client.post("/login", data={"username": "admin", "password": "hunter2pass"})
+    resp = client.post(f"/settings/access/users/{admin_id}/delete")
+    assert resp.status_code == 303
+    with Session(engine) as session:
+        assert session.get(User, admin_id) is not None

@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **New optional feature: login & role-based access.** Off by default (no
+  behavior change for existing installs) -- turn it on in
+  Settings > Access & Users, which prompts you to create the first admin
+  account before login actually takes effect (so you can't lock yourself
+  out). Three roles: **Admin** (full access, including this new Access &
+  Users section), **Contributor** (Children + App Rules management only --
+  the same day-to-day toggles as before, nothing else), and **Viewer**
+  (read-only Status + History). Also supports a "Continue as guest"
+  option on the login page (only shown when an admin enables it), with a
+  fully granular, admin-only-configurable permission panel controlling
+  exactly which pages, which children, and which data categories (screen
+  time, bonus time, app blocking, bedtime/school time) a guest may see --
+  everything defaults to hidden when guest mode is first turned on.
+  Passwords are hashed with bcrypt; sessions use a signed cookie (secret
+  generated once, stored alongside the rest of the app's data).
+  Logged-in users (any role) can also set their own personal display
+  timezone and theme on a new `/account` page, overriding the site-wide
+  defaults for their own account only.
+- Bumped `bcrypt` to `5.0.0` and added `itsdangerous` (required by
+  Starlette's session middleware, used by the new login system).
 - Settings > Children: added an "Auto-revoke bonus time" checkbox per
   child. When enabled, the poller automatically cancels (revokes) any
   active granted bonus/extra screen time on that child's devices on the

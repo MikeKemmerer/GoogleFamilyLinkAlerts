@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Create admin account — Family Link Alerts{% endblock %}
+{% block content %}
+<h1>Family Link Alerts</h1>
+<div class="card">
+  <h2>Create the administrator account</h2>
+  <p class="muted">Enabling login requires at least one administrator account first, so you can never
+     lock yourself out. This account will have full access to Settings, including managing other users.</p>
+  {% if error %}<p class="flash">{{ error }}</p>{% endif %}
+  <form method="post" action="/settings/access/setup-admin">
+    <label for="username">Admin username</label>
+    <input type="text" id="username" name="username" autocomplete="username" required autofocus>
+    <label for="password">Admin password</label>
+    <input type="password" id="password" name="password" autocomplete="new-password" required maxlength="72">
+    <button type="submit">Create admin &amp; enable login</button>
+  </form>
+  <p><a class="btn" href="/settings">Cancel</a></p>
+</div>
+{% endblock %}

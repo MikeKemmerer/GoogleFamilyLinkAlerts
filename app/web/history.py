@@ -18,7 +18,8 @@ from ..diff.labels import (
     humanize_value,
 )
 from ..notify.categories import category_for_field_path
-from .deps import get_db, last_poll_times, render, to_local
+from . import guest_permissions
+from .deps import get_db, get_effective_zone_info, last_poll_times, render, require_page_access, to_local
 
 router = APIRouter()
 
@@ -43,6 +44,20 @@ _CATEGORY_ICONS: dict[str, str] = {
 
 _APP_PKG_FIELD_RE = re.compile(r"^apps_and_usage\.apps\[(?P<pkg>[^\]]+)\]\.")
 
+# Maps a notification category (app.notify.categories.CATEGORIES) to the
+# guest-visibility data category that gates it (see
+# app/web/guest_permissions.py). Categories with no entry here
+# ("polling_issues", "other") are never shown to a guest, regardless of
+# their toggles -- both are operational/ungrouped noise, not something an
+# admin would deliberately want to expose to a guest.
+_GUEST_DATA_CATEGORY: dict[str, str] = {
+    "app_blocking": "data:app_blocking",
+    "screen_time": "data:screen_time",
+    "bonus_time": "data:bonus_time",
+    "bedtime_schooltime": "data:bedtime_schooltime",
+    "device_lock": "data:screen_time",
+}
+
 
 def _raw_display(value: Any) -> str:
     """Unformatted rendering of an old/new value, shown only when a row is
@@ -57,14 +72,44 @@ def _raw_display(value: Any) -> str:
 
 
 @router.get("/history")
-async def history(request: Request, session: Session = Depends(get_db), child_id: str = "", page: int = 1):
+async def history(
+    request: Request,
+    session: Session = Depends(get_db),
+    child_id: str = "",
+    page: int = 1,
+    access=Depends(require_page_access("viewer", "page:history")),
+):
     page = max(page, 1)
+
+    _user, is_guest = access
+    guest_perms = guest_permissions.get_guest_permissions(session) if is_guest else None
+    if guest_perms is not None:
+        allowed_child_ids = guest_permissions.guest_allowed_child_ids(session, guest_perms)
+        # A guest explicitly filtering to a child they're not allowed to see
+        # (e.g. a hand-edited URL) falls back to "no filter" rather than
+        # leaking that the child exists via an empty-but-distinct result.
+        if child_id and child_id not in allowed_child_ids:
+            child_id = ""
+        show_actor = guest_permissions.guest_can(guest_perms, "history:show_actor")
+        full_pagination = guest_permissions.guest_can(guest_perms, "history:full_pagination")
+    else:
+        allowed_child_ids = None
+        show_actor = True
+        full_pagination = True
 
     count_query = select(func.count()).select_from(ChangeEvent)
     if child_id:
         count_query = count_query.where(ChangeEvent.child_id == child_id)
+    elif allowed_child_ids is not None:
+        count_query = count_query.where(ChangeEvent.child_id.in_(allowed_child_ids))
     total_events = session.exec(count_query).one()
     total_pages = max((total_events + _PAGE_SIZE - 1) // _PAGE_SIZE, 1)
+    if not full_pagination:
+        # "history:full_pagination" off means a guest only ever sees the
+        # single most recent page -- older pages aren't reachable at all,
+        # not just hidden behind a nav control (a hand-edited ?page= is
+        # still clamped back to 1 below).
+        total_pages = 1
     # Clamp a too-high page (e.g. a stale bookmark after events were pruned)
     # back onto the last real page instead of silently rendering an empty
     # table with no indication anything went wrong.
@@ -73,13 +118,32 @@ async def history(request: Request, session: Session = Depends(get_db), child_id
     events_query = select(ChangeEvent).order_by(ChangeEvent.detected_at.desc())
     if child_id:
         events_query = events_query.where(ChangeEvent.child_id == child_id)
+    elif allowed_child_ids is not None:
+        events_query = events_query.where(ChangeEvent.child_id.in_(allowed_child_ids))
     events_query = events_query.offset((page - 1) * _PAGE_SIZE).limit(_PAGE_SIZE)
     events = session.exec(events_query).all()
-    failures = session.exec(select(PollFailure).order_by(PollFailure.occurred_at.desc()).limit(50)).all()
+    if guest_perms is not None:
+        # Category filtering happens after the page-sized fetch (not in
+        # SQL) since a category is derived from field_path, not stored --
+        # this can make a guest's page slightly shorter than _PAGE_SIZE
+        # when some rows are filtered out, which is an acceptable trade-off
+        # for keeping the category taxonomy in one place
+        # (app/notify/categories.py) rather than duplicating it into SQL.
+        events = [
+            e for e in events
+            if guest_permissions.guest_can(guest_perms, _GUEST_DATA_CATEGORY.get(category_for_field_path(e.field_path), ""))
+        ]
+    failures = (
+        []
+        if guest_perms is not None
+        else session.exec(select(PollFailure).order_by(PollFailure.occurred_at.desc()).limit(50)).all()
+    )
     children = session.exec(select(Child)).all()
+    if allowed_child_ids is not None:
+        children = [c for c in children if c.id in allowed_child_ids]
     child_names = {c.id: c.name for c in children}
     child_avatars = {c.id: c.avatar_url for c in children}
-    tz = settings_store.get_zone_info(session)
+    tz = get_effective_zone_info(request, session)
 
     # Device IDs are opaque strings (e.g. "aannnppa...") -- resolve them to
     # the friendly names Family Link shows (e.g. "Chromebook") using each
@@ -159,4 +223,5 @@ async def history(request: Request, session: Session = Depends(get_db), child_id
         "page": page,
         "total_pages": total_pages,
         "total_events": total_events,
+        "show_actor": show_actor,
     })
