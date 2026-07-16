@@ -11,17 +11,19 @@ class FakeApiClient:
     """Stands in for FamilyLinkApiClient in poller tests."""
 
     def __init__(self, apps_and_usage=None, time_limit=None, applied_time_limits=None,
-                 raise_on_authenticate=None, raise_on_fetch=None, raise_on_block=None,
-                 raise_on_cancel_bonus=None):
+                 location=None, raise_on_authenticate=None, raise_on_fetch=None,
+                 raise_on_block=None, raise_on_cancel_bonus=None):
         self._apps_and_usage = apps_and_usage or {"apps": []}
         self._time_limit = time_limit or {}
         self._applied_time_limits = applied_time_limits or {}
+        self._location = location
         self._raise_on_authenticate = raise_on_authenticate
         self._raise_on_fetch = raise_on_fetch
         self._raise_on_block = raise_on_block
         self._raise_on_cancel_bonus = raise_on_cancel_bonus
         self.blocked: list[tuple[str, str]] = []
         self.cancelled_bonuses: list[tuple[str, str]] = []
+        self.location_requests: list[tuple[str, bool]] = []
 
     async def authenticate(self):
         if self._raise_on_authenticate:
@@ -37,6 +39,10 @@ class FakeApiClient:
 
     async def get_applied_time_limits(self, child_id, tz=None):
         return self._applied_time_limits
+
+    async def get_location(self, account_id, refresh=False):
+        self.location_requests.append((account_id, refresh))
+        return self._location
 
     async def block_app(self, child_id, package_name):
         if self._raise_on_block:
@@ -104,6 +110,50 @@ async def test_poll_once_detects_change_on_second_poll(monkeypatch, db_session):
         events = s.exec(select(ChangeEvent)).all()
         changed = [e for e in events if e.field_path == "applied_time_limits.devices.dev1.remaining_minutes"]
         assert any(e.old_value == 60 and e.new_value == 30 for e in changed)
+
+
+async def test_poll_once_omits_location_when_tracking_disabled(monkeypatch, db_session):
+    from app.db.models import LatestSnapshot
+
+    fake = FakeApiClient(location={"latitude": 47.60, "longitude": -122.33})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    assert fake.location_requests == []
+    with Session(db_session) as s:
+        snapshot = s.get(LatestSnapshot, "child1")
+        assert "location" not in snapshot.data
+
+
+async def test_poll_once_includes_location_and_diffs_it_when_tracking_enabled(monkeypatch, db_session):
+    from app.db import settings_store
+    from app.db.models import ChangeEvent, LatestSnapshot
+    from sqlmodel import select
+
+    with Session(db_session) as s:
+        settings_store.set_location_tracking_enabled(s, True)
+
+    fake1 = FakeApiClient(location={"latitude": 47.60, "longitude": -122.33, "timestamp": "2026-07-16T09:00:00Z"})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()
+
+    fake2 = FakeApiClient(location={"latitude": 47.61, "longitude": -122.33, "timestamp": "2026-07-16T09:05:00Z"})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    assert fake1.location_requests == [("child1", False)]
+    assert fake2.location_requests == [("child1", False)]
+
+    with Session(db_session) as s:
+        latest = s.get(LatestSnapshot, "child1")
+        assert latest.data["location"]["latitude"] == 47.61
+
+        events = s.exec(select(ChangeEvent).order_by(ChangeEvent.id)).all()
+        latitude_changes = [e for e in events if e.field_path == "location.latitude"]
+        assert len(latitude_changes) == 1
+        assert latitude_changes[0].old_value == 47.60
+        assert latitude_changes[0].new_value == 47.61
 
 
 async def test_poll_once_records_auth_failure(monkeypatch, db_session):
@@ -639,4 +689,3 @@ async def test_poll_once_sends_ntfy_for_enabled_category(monkeypatch, db_session
     await poller.poll_once()
 
     assert len(sent) == 1
-

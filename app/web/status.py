@@ -1,9 +1,12 @@
 """Root status/dashboard page."""
 from __future__ import annotations
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlmodel import Session, select
+from zoneinfo import ZoneInfo
 
 from ..config import settings
 from ..db import settings_store
@@ -11,27 +14,120 @@ from ..db.models import Child, LatestSnapshot
 from ..diff.labels import device_names_from_snapshot, format_minutes
 from ..poller import poll_once
 from . import guest_permissions
-from .deps import build_auth_client, get_db, last_poll_times, render, require_page_access
+from .deps import (
+    build_auth_client,
+    get_db,
+    get_effective_zone_info,
+    last_poll_times,
+    render,
+    require_page_access,
+    to_local,
+)
 
 router = APIRouter()
 
 
-def _build_device_summaries(session: Session, children: list[Child], guest_perms: dict[str, bool] | None) -> list[dict]:
-    """Per-child "screen time today" summary for the Status page: total
-    minutes used today (summed across all their devices) plus a per-device
-    breakdown, sourced from the same `applied_time_limits.devices.*` data
-    already captured every poll (see
-    app/familylink/api_client.py:_parse_applied_time_limits) -- nothing new
-    to fetch, just a live view of what's already stored.
+def _parse_location_timestamp(value: str | None) -> datetime | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _battery_badge_class(level: int | None) -> str:
+    if level is None:
+        return "badge"
+    if level >= 60:
+        return "badge-ok"
+    if level >= 25:
+        return "badge-warn"
+    return "badge-bad"
+
+
+def _build_location_context(raw_location: dict | None, tz: ZoneInfo) -> dict | None:
+    if not isinstance(raw_location, dict):
+        return None
+    try:
+        latitude = float(raw_location["latitude"])
+        longitude = float(raw_location["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    accuracy = raw_location.get("accuracy")
+    try:
+        accuracy = int(accuracy) if accuracy is not None else None
+    except (TypeError, ValueError):
+        accuracy = None
+
+    battery_level = raw_location.get("battery_level")
+    try:
+        battery_level = int(battery_level) if battery_level is not None else None
+    except (TypeError, ValueError):
+        battery_level = None
+
+    parsed_timestamp = _parse_location_timestamp(raw_location.get("timestamp"))
+    updated_display = (
+        to_local(parsed_timestamp, tz).strftime("%Y-%m-%d %H:%M")
+        if parsed_timestamp
+        else (raw_location.get("timestamp") or "unknown")
+    )
+
+    source_device_name = raw_location.get("source_device_name")
+    if not isinstance(source_device_name, str) or not source_device_name.strip():
+        source_device_name = None
+    else:
+        source_device_name = source_device_name.strip()
+
+    place_name = raw_location.get("place_name")
+    if not isinstance(place_name, str) or not place_name.strip():
+        place_name = None
+    else:
+        place_name = place_name.strip()
+
+    place_address = raw_location.get("place_address")
+    if not isinstance(place_address, str) or not place_address.strip():
+        place_address = None
+    else:
+        place_address = place_address.strip()
+
+    return {
+        "latitude": latitude,
+        "longitude": longitude,
+        "accuracy": accuracy,
+        "timestamp": raw_location.get("timestamp"),
+        "updated_display": updated_display,
+        "place_name": place_name,
+        "place_address": place_address,
+        "source_device_name": source_device_name,
+        "battery_level": battery_level,
+        "battery_badge_class": _battery_badge_class(battery_level),
+    }
+
+
+def _build_device_summaries(
+    session: Session,
+    children: list[Child],
+    guest_perms: dict[str, bool] | None,
+    tz: ZoneInfo,
+) -> list[dict]:
+    """Per-child device activity summary for the Status page: total minutes
+    used today (summed across all their devices) plus per-device screen
+    time, lock/bedtime badges, and (when available/permitted) last-known
+    location + battery data already stored in LatestSnapshot.
 
     `guest_perms` is None for a real logged-in user/no-auth (show
     everything); for a guest session it's their admin-configured
     permissions dict, used to omit bonus time / bedtime+schooltime /
-    lock-state detail they haven't been explicitly granted (see
+    location / battery detail they haven't been explicitly granted (see
     app/web/guest_permissions.py).
     """
     show_bonus = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:bonus_time")
     show_bedtime_schooltime = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:bedtime_schooltime")
+    show_location = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:location")
+    show_battery = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:battery")
+    location_tracking_enabled = settings_store.get_location_tracking_enabled(session)
 
     summaries = []
     for child in children:
@@ -62,16 +158,55 @@ def _build_device_summaries(session: Session, children: list[Child], guest_perms
                 "bedtime_active": bool(info.get("bedtime_active")) and show_bedtime_schooltime,
                 "schooltime_active": bool(info.get("schooltime_active")) and show_bedtime_schooltime,
                 "locked": bool(lock_states.get(device_id)),
+                "location": None,
+                "battery_level": None,
+                "battery_badge_class": None,
                 # Used to decide default collapse state -- see
                 # app/templates/status.html.
                 "used_today": used_minutes > 0,
             })
         devices.sort(key=lambda d: d["name"].lower())
 
+        summary_location = None
+        location = _build_location_context((data or {}).get("location"), tz) if location_tracking_enabled else None
+        if location:
+            matched_device = None
+            source_name = location.get("source_device_name")
+            if source_name:
+                for device in devices:
+                    if device["name"].casefold() == source_name.casefold():
+                        matched_device = device
+                        break
+            elif len(devices) == 1:
+                matched_device = devices[0]
+
+            public_location = {
+                "latitude": location["latitude"],
+                "longitude": location["longitude"],
+                "accuracy": location["accuracy"],
+                "timestamp": location["timestamp"],
+                "updated_display": location["updated_display"],
+                "place_name": location["place_name"],
+                "place_address": location["place_address"],
+                "source_device_name": location["source_device_name"],
+            }
+            if matched_device is not None:
+                if show_location:
+                    matched_device["location"] = public_location
+                if show_battery:
+                    matched_device["battery_level"] = location["battery_level"]
+                    matched_device["battery_badge_class"] = location["battery_badge_class"]
+            elif show_location:
+                summary_location = dict(public_location)
+                if show_battery:
+                    summary_location["battery_level"] = location["battery_level"]
+                    summary_location["battery_badge_class"] = location["battery_badge_class"]
+
         summaries.append({
             "child": child,
             "total_used_display": format_minutes(total_used_minutes),
             "devices": devices,
+            "location": summary_location,
         })
     return summaries
 
@@ -105,7 +240,12 @@ async def root(
     enabled_poll_times = [poll_times[c.id] for c in enabled_children if c.id in poll_times]
     last_poll_at = max(enabled_poll_times) if enabled_poll_times else None
 
-    device_summaries = _build_device_summaries(session, enabled_children, guest_perms)
+    device_summaries = _build_device_summaries(
+        session,
+        enabled_children,
+        guest_perms,
+        get_effective_zone_info(request, session),
+    )
 
     return render(request, "status.html", session, {
         "setup_completed": True,

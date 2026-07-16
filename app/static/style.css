@@ -162,9 +162,20 @@ button:hover, .btn:hover { background: var(--accent-hover); }
 .pill-toggle input:checked + span { background: var(--accent); color: var(--accent-contrast); }
 
 /* History page's child filter dropdown. */
-.filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+.filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .filter-bar label { margin: 0; font-weight: 600; font-size: 0.85rem; }
 .filter-bar select { margin: 0; width: auto; }
+.history-location-link { margin-left: auto; }
+.history-category-pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.2rem 0 0.85rem; }
+.history-category-badge { margin-left: 0.45rem; vertical-align: middle; }
+.history-location-layout {
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 1rem; align-items: start;
+}
+.history-location-map { min-height: 320px; }
+.history-location-panel label { display: block; margin-bottom: 0.45rem; font-weight: 600; }
+.history-location-slider { width: 100%; }
+.history-location-meta { margin-top: 0.75rem; }
 
 table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
 th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
@@ -174,6 +185,23 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
 .row-detail { margin-top: 0.4rem; }
 .muted { color: var(--text-muted); font-size: 0.9rem; }
 .hint { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.4rem; }
+.device-activity-item { margin-left: 1.5rem; }
+.device-location-panel {
+  margin-top: 0.65rem; padding: 0.75rem; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--surface-alt);
+}
+.device-location-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  margin: 0 0 0.45rem;
+}
+.device-location-meta, .device-location-text { margin-top: 0.45rem; }
+.device-location-map {
+  height: 190px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface);
+}
+.leaflet-container {
+  color: var(--text); font: inherit; background: var(--surface);
+}
 .field-path {
   color: var(--text-muted); font-size: 0.75rem; font-family: "JetBrains Mono", Consolas, monospace;
   margin-top: 0.15rem; overflow-wrap: anywhere; word-break: break-word;
@@ -219,4 +247,6 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
   }
   table.stack-mobile td:empty { display: none; }
   .btn, button { width: 100%; box-sizing: border-box; text-align: center; }
+  .history-location-layout { grid-template-columns: 1fr; }
+  .history-location-link { margin-left: 0; }
 }

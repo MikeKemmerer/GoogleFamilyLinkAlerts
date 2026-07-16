@@ -30,6 +30,11 @@ def test_category_for_field_path_bedtime_schooltime():
     assert category_for_field_path("applied_time_limits.devices.dev1.schooltime_active") == "bedtime_schooltime"
 
 
+def test_category_for_field_path_location():
+    assert category_for_field_path("location.latitude") == "location"
+    assert category_for_field_path("location.source_device_name") == "location"
+
+
 def test_category_for_field_path_device_lock():
     assert category_for_field_path("applied_time_limits.device_lock_states.dev1") == "device_lock"
 

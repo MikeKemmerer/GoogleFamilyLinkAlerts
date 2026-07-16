@@ -20,6 +20,7 @@ CATEGORIES: dict[str, str] = {
     "screen_time": "Screen time & limits (daily limit, used/remaining)",
     "bonus_time": "Bonus/extra time (granted, revoked)",
     "bedtime_schooltime": "Bedtime & school time schedule",
+    "location": "Location updates",
     "device_lock": "Device lock state",
     "polling_issues": "Polling issues (login/network failures)",
     "other": "Everything else",
@@ -45,6 +46,7 @@ _CATEGORY_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
         r"(bedtime_window\.(start_ms|end_ms)|schooltime_window\.(start_ms|end_ms)|"
         r"bedtime_active|schooltime_active)$"
     ), "bedtime_schooltime"),
+    (re.compile(r"^location\."), "location"),
     (re.compile(r"^applied_time_limits\.device_lock_states\.[^.]+$"), "device_lock"),
 )
 

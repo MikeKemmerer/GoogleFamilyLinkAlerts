@@ -7,15 +7,48 @@ faked via monkeypatching the names each router module imported directly.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.pool import StaticPool
 
-from app.db.models import Child, ChangeEvent, PollFailure
+from app.db.models import Child, ChangeEvent, LatestSnapshot, PollFailure
 from app.web import history, settings as settings_web, setup, status
 from app.web.deps import get_db
+
+
+def _status_snapshot_with_location():
+    return {
+        "apps_and_usage": {
+            "deviceInfo": [
+                {"deviceId": "dev1", "displayInfo": {"friendlyName": "Pixel 8"}},
+            ]
+        },
+        "applied_time_limits": {
+            "devices": {
+                "dev1": {
+                    "used_minutes": 45,
+                    "daily_limit_enabled": True,
+                    "remaining_minutes": 75,
+                    "daily_limit_minutes": 120,
+                }
+            },
+            "device_lock_states": {"dev1": False},
+        },
+        "location": {
+            "latitude": 47.6062,
+            "longitude": -122.3321,
+            "accuracy": 25,
+            "timestamp": "2024-07-16T16:00:00+00:00",
+            "place_name": "Home",
+            "place_address": "123 Main St, Seattle, WA",
+            "battery_level": 87,
+            "source_device_name": "Pixel 8",
+        },
+    }
 
 
 class FakeAuthClient:
@@ -73,6 +106,78 @@ def client(engine):
 
     app.dependency_overrides[get_db] = override_get_db
     return TestClient(app, follow_redirects=False)
+
+
+def _add_location_history(session: Session, child_id: str) -> None:
+    timeline = [
+        (
+            datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc),
+            {
+                "latitude": 47.61,
+                "longitude": -122.34,
+                "accuracy": 35,
+                "timestamp": "2026-07-16T16:00:00+00:00",
+                "place_name": "Park",
+            },
+            {
+                "latitude": 47.60,
+                "longitude": -122.33,
+                "accuracy": 50,
+                "timestamp": "2026-07-16T15:55:00+00:00",
+                "place_name": "School",
+            },
+        ),
+        (
+            datetime(2026, 7, 16, 16, 5, tzinfo=timezone.utc),
+            {
+                "latitude": 47.62,
+                "longitude": -122.35,
+                "accuracy": 25,
+                "timestamp": "2026-07-16T16:05:00+00:00",
+                "place_name": "Library",
+            },
+            {
+                "latitude": 47.61,
+                "longitude": -122.34,
+                "accuracy": 35,
+                "timestamp": "2026-07-16T16:00:00+00:00",
+                "place_name": "Park",
+            },
+        ),
+        (
+            datetime(2026, 7, 16, 16, 10, tzinfo=timezone.utc),
+            {
+                "latitude": 47.63,
+                "longitude": -122.36,
+                "accuracy": 20,
+                "timestamp": "2026-07-16T16:10:00+00:00",
+                "place_name": "Home",
+            },
+            {
+                "latitude": 47.62,
+                "longitude": -122.35,
+                "accuracy": 25,
+                "timestamp": "2026-07-16T16:05:00+00:00",
+                "place_name": "Library",
+            },
+        ),
+    ]
+    for detected_at, new_values, old_values in timeline:
+        for field_name, new_value in new_values.items():
+            session.add(ChangeEvent(
+                child_id=child_id,
+                field_path=f"location.{field_name}",
+                old_value=old_values.get(field_name),
+                new_value=new_value,
+                detected_at=detected_at,
+            ))
+    session.add(LatestSnapshot(child_id=child_id, data={"location": {
+        "latitude": 47.63,
+        "longitude": -122.36,
+        "accuracy": 20,
+        "timestamp": "2026-07-16T16:10:00+00:00",
+        "place_name": "Home",
+    }}))
 
 
 def test_setup_shows_auth_stage_when_unhealthy(monkeypatch, client):
@@ -244,12 +349,15 @@ def test_settings_page_notification_categories_persist(monkeypatch, client, engi
     monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
 
     from app.db import settings_store
+    with Session(engine) as s:
+        settings_store.set_location_tracking_enabled(s, True)
 
     # Not yet configured -- defaults to every category enabled, and every
     # checkbox should render checked.
     resp = client.get("/settings")
     assert 'name="category_app_blocking" checked' in resp.text
     assert 'name="category_screen_time" checked' in resp.text
+    assert 'name="category_location" checked' in resp.text
 
     # Saving with only one category checked leaves just that one enabled.
     resp2 = client.post("/settings", data={
@@ -265,6 +373,27 @@ def test_settings_page_notification_categories_persist(monkeypatch, client, engi
     resp3 = client.get("/settings")
     assert 'name="category_app_blocking" checked' in resp3.text
     assert 'name="category_screen_time" checked' not in resp3.text
+
+
+def test_settings_page_hides_location_category_when_tracking_disabled(monkeypatch, client):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert 'name="category_location"' not in resp.text
+
+
+def test_settings_page_shows_location_category_when_tracking_enabled(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    from app.db import settings_store
+
+    with Session(engine) as s:
+        settings_store.set_location_tracking_enabled(s, True)
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert 'name="category_location" checked' in resp.text
 
 
 def test_settings_page_timezone_persists(monkeypatch, client, engine):
@@ -328,6 +457,49 @@ def test_poll_now_triggers_poll_and_redirects(monkeypatch, client):
     assert called["count"] == 1
 
 
+def test_status_page_hides_location_and_battery_when_tracking_disabled(monkeypatch, client, engine):
+    from app.db import settings_store
+    from app.db.models import LatestSnapshot
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    with Session(engine) as s:
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_location()))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Device activity" in resp.text
+    assert "device-location-map" not in resp.text
+    assert "battery-badge" not in resp.text
+
+
+def test_status_page_shows_location_map_and_battery_when_present(monkeypatch, client, engine):
+    from app.db import settings_store
+    from app.db.models import LatestSnapshot
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    with Session(engine) as s:
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        settings_store.set_location_tracking_enabled(s, True)
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_location()))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "device-location-map" in resp.text
+    assert "battery-badge" in resp.text
+    assert "/tiles/{z}/{x}/{y}.png" in resp.text
+    assert "Last updated 2024-07-16 16:00" in resp.text
+    assert "Home" in resp.text
+
+
 def test_history_page_lists_events_and_failures(client, engine):
     with Session(engine) as s:
         s.add(Child(id="child1", name="Kiddo"))
@@ -358,6 +530,56 @@ def test_history_page_filters_by_child(client, engine):
     resp_all = client.get("/history")
     assert "apps.tiktok.blocked" in resp_all.text
     assert "apps.roblox.blocked" in resp_all.text
+
+
+def test_history_page_shows_location_icon_and_label(client, engine):
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo"))
+        s.add(ChangeEvent(child_id="child1", field_path="location.latitude", old_value=47.60, new_value=47.61))
+        s.commit()
+
+    resp = client.get("/history")
+    assert resp.status_code == 200
+    assert "icon-map-pin" in resp.text
+    assert "Location" in resp.text
+    assert "location.latitude" in resp.text
+
+
+def test_history_page_links_to_location_history_only_when_child_has_location_events(client, engine):
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo"))
+        s.add(Child(id="child2", name="Other Kid"))
+        s.add(ChangeEvent(child_id="child1", field_path="location.latitude", old_value=47.60, new_value=47.61))
+        s.commit()
+
+    resp_child1 = client.get("/history", params={"child_id": "child1"})
+    assert resp_child1.status_code == 200
+    assert "View location history" in resp_child1.text
+    assert "view=location" in resp_child1.text
+
+    resp_child2 = client.get("/history", params={"child_id": "child2"})
+    assert resp_child2.status_code == 200
+    assert "View location history" not in resp_child2.text
+
+
+def test_history_location_view_renders_map_slider_and_fix_count(client, engine):
+    from app.db import settings_store
+
+    with Session(engine) as s:
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo"))
+        _add_location_history(s, "child1")
+        s.commit()
+
+    resp = client.get("/history", params={"child_id": "child1", "view": "location"})
+    assert resp.status_code == 200
+    assert "Location history" in resp.text
+    assert 'id="location-history-map"' in resp.text
+    assert 'type="range"' in resp.text
+    assert 'data-fix-count="3"' in resp.text
+    assert "Park" in resp.text
+    assert "Library" in resp.text
+    assert "Home" in resp.text
 
 
 def test_history_page_paginates_events(client, engine):

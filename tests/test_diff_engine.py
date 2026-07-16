@@ -41,6 +41,16 @@ def test_diff_detects_changed_value():
     assert changes[0].new_value == 90
 
 
+def test_diff_detects_nested_location_change():
+    old = {"location": {"latitude": 47.60, "longitude": -122.33}}
+    new = {"location": {"latitude": 47.61, "longitude": -122.33}}
+    changes = diff_snapshots(old, new)
+    assert len(changes) == 1
+    assert changes[0].field_path == "location.latitude"
+    assert changes[0].old_value == 47.60
+    assert changes[0].new_value == 47.61
+
+
 def test_diff_detects_added_and_removed_fields():
     old = {"apps": {"a": {"blocked": True}}}
     new = {"apps": {"b": {"blocked": False}}}

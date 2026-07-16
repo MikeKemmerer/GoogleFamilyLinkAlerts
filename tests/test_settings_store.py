@@ -44,3 +44,11 @@ def test_get_zone_info_resolves_valid_saved_value(tmp_path):
     with Session(engine) as s:
         settings_store.set_timezone(s, "Asia/Tokyo")
         assert settings_store.get_zone_info(s) == ZoneInfo("Asia/Tokyo")
+
+
+def test_location_tracking_enabled_defaults_false_and_can_be_enabled(tmp_path):
+    engine = _engine(tmp_path)
+    with Session(engine) as s:
+        assert settings_store.get_location_tracking_enabled(s) is False
+        settings_store.set_location_tracking_enabled(s, True)
+        assert settings_store.get_location_tracking_enabled(s) is True

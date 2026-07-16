@@ -22,6 +22,13 @@ router = APIRouter()
 _THEME_CYCLE = ("auto", "light", "dark")
 
 
+def _notification_categories_for_settings(session: Session) -> dict[str, str]:
+    categories = dict(CATEGORIES)
+    if not settings_store.get_location_tracking_enabled(session):
+        categories.pop("location", None)
+    return categories
+
+
 @router.get("/account")
 async def account_get(request: Request, session: Session = Depends(get_db), current_user: User = Depends(require_role("viewer"))):
     """A lightweight personal-preferences page reachable by any logged-in
@@ -89,6 +96,7 @@ async def settings_get(
     users = session.exec(select(User)).all() if is_admin else []
     guest_view_enabled = settings_store.get_guest_view_enabled(session) if is_admin else False
     guest_perms = guest_permissions.get_guest_permissions(session) if is_admin else {}
+    notification_categories = _notification_categories_for_settings(session)
 
     return render(request, "settings.html", session, {
         "setup_completed": True,
@@ -104,7 +112,7 @@ async def settings_get(
         "ntfy_topic": ntfy_config[1] if ntfy_config else "",
         "poll_interval_minutes": settings_store.get_poll_interval_minutes(session),
         "notifications_enabled": settings_store.get_notifications_enabled(session),
-        "notification_categories": CATEGORIES,
+        "notification_categories": notification_categories,
         "enabled_notification_categories": settings_store.get_enabled_notification_categories(session),
         "timezone": settings_store.get_timezone(session),
         "timezone_groups": settings_store.get_timezone_options(session),
@@ -127,7 +135,10 @@ async def settings_post(request: Request, session: Session = Depends(get_db), _a
     ntfy_topic = form.get("ntfy_topic", "").strip()
     poll_interval_minutes = int(form.get("poll_interval_minutes", 20))
     notifications_enabled = form.get("notifications_enabled") is not None
-    enabled_categories = {key for key in CATEGORIES if form.get(f"category_{key}") is not None}
+    visible_categories = _notification_categories_for_settings(session)
+    enabled_categories = {key for key in visible_categories if form.get(f"category_{key}") is not None}
+    hidden_categories = set(CATEGORIES) - set(visible_categories)
+    enabled_categories |= settings_store.get_enabled_notification_categories(session) & hidden_categories
     # The dropdown's "Other..." option switches to a free-text sibling
     # field (timezone_other) instead of submitting a made-up <option>
     # value, so a custom zone name is only ever read from there.

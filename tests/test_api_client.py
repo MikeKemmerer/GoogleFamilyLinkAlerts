@@ -116,9 +116,16 @@ async def test_unblock_app_posts_empty_restriction_payload(monkeypatch):
 
 
 class _FakeResponse:
-    def __init__(self, status_code=200, text=""):
+    def __init__(self, status_code=200, text="", json_data=None, content=b"{}"):
         self.status_code = status_code
         self.text = text
+        self._json_data = json_data
+        self.content = content
+
+    def json(self):
+        if self._json_data is None:
+            raise ValueError("No JSON data configured")
+        return self._json_data
 
 
 class _FakeHttpxClient:
@@ -140,6 +147,10 @@ class _FakeHttpxClient:
 
     async def post(self, url, headers=None, **kwargs):
         type(self).calls.append((url, headers))
+        return type(self).response
+
+    async def get(self, url, params=None, headers=None, **kwargs):
+        type(self).calls.append((url, params, headers))
         return type(self).response
 
 
@@ -185,3 +196,99 @@ async def test_cancel_time_bonus_raises_network_error_on_non_200(monkeypatch):
 
     with pytest.raises(NetworkError):
         await client.cancel_time_bonus("child1", "override1")
+
+
+async def test_get_location_parses_upstream_array_response_and_resolves_device_name(monkeypatch):
+    import httpx as httpx_module
+
+    client = FamilyLinkApiClient(auth_client=None)
+    client._cookies = [
+        {"name": "SID", "value": "abc", "domain": ".google.com"},
+        {"name": "SAPISID", "value": "def", "domain": ".google.com"},
+    ]
+    _FakeHttpxClient.calls = []
+    _FakeHttpxClient.response = _FakeResponse(
+        status_code=200,
+        json_data=[
+            [None, "1721145600000"],
+            [
+                "child1",
+                1,
+                [
+                    [47.6062, -122.3321],
+                    "1721145600000",
+                    "25",
+                    "300000",
+                    ["place123", "Home", "123 Main St, Seattle, WA"],
+                    "123 Main St, Seattle, WA",
+                    "device-1",
+                    None,
+                    [87, 1],
+                ],
+                None,
+                1,
+            ],
+        ],
+    )
+    monkeypatch.setattr(httpx_module, "AsyncClient", _FakeHttpxClient)
+
+    async def fake_get_apps_and_usage(account_id):
+        assert account_id == "child1"
+        return {
+            "deviceInfo": [
+                {"deviceId": "device-1", "displayInfo": {"friendlyName": "Pixel 8"}},
+            ]
+        }
+
+    monkeypatch.setattr(client, "get_apps_and_usage", fake_get_apps_and_usage)
+
+    result = await client.get_location("child1")
+
+    assert _FakeHttpxClient.calls[0][0] == f"{FamilyLinkApiClient.BASE_URL}/families/mine/location/child1"
+    assert _FakeHttpxClient.calls[0][1] == [
+        ("locationRefreshMode", FamilyLinkApiClient.LOCATION_REFRESH_MODE_DO_NOT_REFRESH),
+        ("supportedConsents", "SUPERVISED_LOCATION_SHARING"),
+    ]
+    assert result == {
+        "latitude": 47.6062,
+        "longitude": -122.3321,
+        "accuracy": 25,
+        "timestamp": "2024-07-16T16:00:00+00:00",
+        "source_device_name": "Pixel 8",
+        "place_name": "Home",
+        "place_address": "123 Main St, Seattle, WA",
+        "battery_level": 87,
+    }
+
+
+async def test_get_location_returns_none_for_malformed_array_response(monkeypatch):
+    import httpx as httpx_module
+
+    client = FamilyLinkApiClient(auth_client=None)
+    client._cookies = [
+        {"name": "SID", "value": "abc", "domain": ".google.com"},
+        {"name": "SAPISID", "value": "def", "domain": ".google.com"},
+    ]
+    _FakeHttpxClient.calls = []
+    _FakeHttpxClient.response = _FakeResponse(
+        status_code=200,
+        json_data=[[None, "1721145600000"], ["child1", 1, [[47.6062], "1721145600000"]]],
+    )
+    monkeypatch.setattr(httpx_module, "AsyncClient", _FakeHttpxClient)
+
+    assert await client.get_location("child1") is None
+
+
+async def test_get_location_returns_none_for_404(monkeypatch):
+    import httpx as httpx_module
+
+    client = FamilyLinkApiClient(auth_client=None)
+    client._cookies = [
+        {"name": "SID", "value": "abc", "domain": ".google.com"},
+        {"name": "SAPISID", "value": "def", "domain": ".google.com"},
+    ]
+    _FakeHttpxClient.calls = []
+    _FakeHttpxClient.response = _FakeResponse(status_code=404, text="not found", json_data=None, content=b"")
+    monkeypatch.setattr(httpx_module, "AsyncClient", _FakeHttpxClient)
+
+    assert await client.get_location("child1") is None

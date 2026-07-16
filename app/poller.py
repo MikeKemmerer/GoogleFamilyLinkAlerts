@@ -48,13 +48,21 @@ def build_api_client() -> FamilyLinkApiClient:
     return FamilyLinkApiClient(auth_client)
 
 
-async def _fetch_child_snapshot(client: FamilyLinkApiClient, child_id: str, tz) -> dict[str, Any]:
+async def _fetch_child_snapshot(
+    client: FamilyLinkApiClient,
+    child_id: str,
+    tz,
+    *,
+    location_tracking_enabled: bool = False,
+) -> dict[str, Any]:
     global _website_filter_warned
     snapshot: dict[str, Any] = {}
 
     snapshot["apps_and_usage"] = await client.get_apps_and_usage(child_id)
     snapshot["time_limit"] = await client.get_time_limit(child_id)
     snapshot["applied_time_limits"] = await client.get_applied_time_limits(child_id, tz=tz)
+    if location_tracking_enabled:
+        snapshot["location"] = await client.get_location(child_id)
 
     try:
         snapshot["website_filter"] = await get_website_filter(client, child_id)
@@ -424,10 +432,16 @@ async def poll_once() -> None:
 
         await _refresh_child_avatars(session, client, children)
         tz = settings_store.get_zone_info(session)
+        location_tracking_enabled = settings_store.get_location_tracking_enabled(session)
 
         for child in children:
             try:
-                new_snapshot = await _fetch_child_snapshot(client, child.id, tz)
+                new_snapshot = await _fetch_child_snapshot(
+                    client,
+                    child.id,
+                    tz,
+                    location_tracking_enabled=location_tracking_enabled,
+                )
             except SessionExpiredError as err:
                 failure = _record_failure(session, "session_expired", str(err))
                 await _maybe_notify_failure(session, failure)

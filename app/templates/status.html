@@ -1,5 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Status — Family Link Alerts{% endblock %}
+{% macro render_location_panel(location, battery_level=None, battery_badge_class="badge", source_label=None) -%}
+  <div class="device-location-panel">
+    {% if source_label or battery_level is not none %}
+      <div class="device-location-header hint">
+        {% if source_label %}<strong>{{ source_label }}</strong>{% endif %}
+        {% if battery_level is not none %}
+          <span class="badge {{ battery_badge_class }} battery-badge"><svg class="icon"><use href="/static/icons.svg#icon-battery"></use></svg>{{ battery_level }}%</span>
+        {% endif %}
+      </div>
+    {% endif %}
+    <div class="device-location-map js-location-map" data-latitude="{{ location.latitude }}" data-longitude="{{ location.longitude }}" data-accuracy="{{ location.accuracy if location.accuracy is not none else '' }}"></div>
+    <div class="hint device-location-meta">Last updated {{ location.updated_display }}{% if location.accuracy is not none %} · ±{{ location.accuracy }}m{% endif %}</div>
+    {% if location.place_name or location.place_address %}
+      <div class="hint device-location-text">
+        {% if location.place_name %}{{ location.place_name }}{% endif %}
+        {% if location.place_address and location.place_address != location.place_name %}
+          {% if location.place_name %} — {% endif %}{{ location.place_address }}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+{% block extra_head %}
+  <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+{% endblock %}
 {% block content %}
 <h1><svg class="icon icon-lg"><use href="/static/icons.svg#icon-house"></use></svg>Status</h1>
 
@@ -49,7 +74,7 @@
 
 {% if device_summaries %}
 <div class="card">
-  <h2><svg class="icon"><use href="/static/icons.svg#icon-sun"></use></svg>Screen time today</h2>
+  <h2><svg class="icon"><use href="/static/icons.svg#icon-smartphone"></use></svg>Device activity</h2>
   {% for summary in device_summaries %}
     <div style="margin-bottom: 1rem;">
       <p style="margin: 0 0 0.3rem;">
@@ -60,21 +85,28 @@
         <p class="muted hint">No device data yet.</p>
       {% endif %}
       {% for device in summary.devices %}
-        <details {% if device.used_today %}open{% endif %} style="margin-left: 1.5rem;">
+        <details {% if device.used_today or device.location %}open{% endif %} class="device-activity-item">
           <summary>
             <svg class="icon"><use href="/static/icons.svg#icon-{% if device.name and 'phone' in device.name.lower() %}smartphone{% else %}tablet{% endif %}"></use></svg>
             {{ device.name }} — {{ device.used_display }} used
             {% if device.locked %}<span class="badge badge-bad"><svg class="icon"><use href="/static/icons.svg#icon-lock"></use></svg>locked</span>{% endif %}
             {% if device.bedtime_active %}<span class="badge"><svg class="icon"><use href="/static/icons.svg#icon-bed"></use></svg>bedtime</span>{% endif %}
             {% if device.schooltime_active %}<span class="badge"><svg class="icon"><use href="/static/icons.svg#icon-monitor-check"></use></svg>school time</span>{% endif %}
+            {% if device.battery_level is not none %}<span class="badge {{ device.battery_badge_class }} battery-badge"><svg class="icon"><use href="/static/icons.svg#icon-battery"></use></svg>{{ device.battery_level }}%</span>{% endif %}
           </summary>
           <div class="row-detail hint">
             {% if device.daily_limit_display %}Daily limit: {{ device.daily_limit_display }} · {% endif %}
             {% if device.remaining_display %}Remaining: {{ device.remaining_display }} · {% endif %}
             {% if device.bonus_display %}Bonus time: {{ device.bonus_display }}{% endif %}
           </div>
+          {% if device.location %}
+            {{ render_location_panel(device.location) }}
+          {% endif %}
         </details>
       {% endfor %}
+      {% if summary.location %}
+        {{ render_location_panel(summary.location, summary.location.battery_level, summary.location.battery_badge_class, summary.location.source_device_name or "Latest location") }}
+      {% endif %}
     </div>
   {% endfor %}
 </div>
@@ -84,4 +116,42 @@
   <h2><svg class="icon"><use href="/static/icons.svg#icon-list"></use></svg>Recent activity</h2>
   <p><a href="/history">View full change history &amp; polling issues &rarr;</a></p>
 </div>
+{% endblock %}
+{% block extra_scripts %}
+  <script src="/static/leaflet/leaflet.js"></script>
+  <script>
+    (function () {
+      if (!window.L) return;
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "/static/leaflet/images/marker-icon-2x.png",
+        iconUrl: "/static/leaflet/images/marker-icon.png",
+        shadowUrl: "/static/leaflet/images/marker-shadow.png"
+      });
+      document.querySelectorAll(".js-location-map").forEach(function (el) {
+        if (el.dataset.initialized === "true") return;
+        var lat = parseFloat(el.dataset.latitude);
+        var lng = parseFloat(el.dataset.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        var accuracy = parseFloat(el.dataset.accuracy);
+        var map = L.map(el, { attributionControl: false, zoomControl: false });
+        L.tileLayer("/tiles/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+        var point = [lat, lng];
+        L.marker(point).addTo(map);
+        if (Number.isFinite(accuracy) && accuracy > 0) {
+          var circle = L.circle(point, {
+            radius: accuracy,
+            color: "#e2762f",
+            fillColor: "#e2762f",
+            fillOpacity: 0.15,
+            weight: 1
+          }).addTo(map);
+          map.fitBounds(circle.getBounds(), { padding: [16, 16] });
+        } else {
+          map.setView(point, 13);
+        }
+        el.dataset.initialized = "true";
+      });
+    })();
+  </script>
 {% endblock %}

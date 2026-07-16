@@ -25,6 +25,7 @@ _KEY_TIMEZONE = "timezone"
 _KEY_THEME = "theme"
 _KEY_AUTH_ENABLED = "auth_enabled"
 _KEY_GUEST_VIEW_ENABLED = "guest_view_enabled"
+_KEY_LOCATION_TRACKING_ENABLED = "location_tracking_enabled"
 _KEY_SESSION_SECRET = "session_secret"
 
 VALID_THEMES = ("auto", "light", "dark")
@@ -234,6 +235,15 @@ def get_guest_view_enabled(session: Session) -> bool:
 
 def set_guest_view_enabled(session: Session, enabled: bool) -> None:
     set_(session, _KEY_GUEST_VIEW_ENABLED, "true" if enabled else "false")
+
+
+def get_location_tracking_enabled(session: Session) -> bool:
+    """Whether GPS location polling is enabled for Family Link monitoring."""
+    return get(session, _KEY_LOCATION_TRACKING_ENABLED) == "true"
+
+
+def set_location_tracking_enabled(session: Session, enabled: bool) -> None:
+    set_(session, _KEY_LOCATION_TRACKING_ENABLED, "true" if enabled else "false")
 
 
 def get_or_create_session_secret(session: Session) -> str:

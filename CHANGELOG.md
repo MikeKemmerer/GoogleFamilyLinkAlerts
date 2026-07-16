@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **New optional feature: device location & battery.** Off by default --
+  turn on "Location tracking" in Settings to start recording each child's
+  last-known device location (latitude/longitude/accuracy/place name) and
+  the reporting device's battery level, ported from HAFamilyLink's
+  `async_get_location`. The Status page's "Screen time today" section is
+  now "Device activity" and shows a small embedded map (self-hosted
+  Leaflet, no third-party map/JS CDN) plus a battery badge per device with
+  location data. Map tiles are proxied and cached through this app's own
+  server (`GET /tiles/{z}/{x}/{y}.png`) so no third party ever sees your
+  browser's IP alongside the map area you're viewing. History gets a new
+  "Location" category/icon, plus a dedicated location-history view (select
+  a child, scrub through past fixes on a map with a time slider) --
+  reconstructed automatically from the same change-history mechanism every
+  other tracked field already uses, no new storage needed. Guest view-only
+  access has independent, admin-configurable toggles for both location and
+  battery visibility (defaults to hidden, like every other guest
+  category).
 - **New optional feature: login & role-based access.** Off by default (no
   behavior change for existing installs) -- turn it on in
   Settings > Access & Users, which prompts you to create the first admin

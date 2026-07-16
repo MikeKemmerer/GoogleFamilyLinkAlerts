@@ -20,7 +20,7 @@ from .db import settings_store
 from .db.migrate import run_migrations
 from .db.session import get_engine
 from .poller import start_scheduler
-from .web import auth, history, settings as settings_web, setup, status
+from .web import auth, history, settings as settings_web, setup, status, tiles
 
 logging.basicConfig(level=logging.INFO)
 
@@ -66,4 +66,4 @@ app.include_router(setup.router)
 app.include_router(settings_web.router)
 app.include_router(history.router)
 app.include_router(auth.router)
-
+app.include_router(tiles.router)

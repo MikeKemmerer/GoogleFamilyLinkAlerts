@@ -53,6 +53,8 @@ class FamilyLinkApiClient:
 
     # SAPISIDHASH timestamps must stay fresh; rebuild headers periodically.
     SESSION_MAX_AGE = 1800  # seconds
+    LOCATION_REFRESH_MODE_DO_NOT_REFRESH = "1"
+    LOCATION_REFRESH_MODE_REFRESH = "2"
 
     def __init__(self, auth_client: AuthClient) -> None:
         self._auth_client = auth_client
@@ -252,6 +254,147 @@ class FamilyLinkApiClient:
             ("capabilities", "CAPABILITY_SUPERVISION_CAPABILITIES"),
         ]
         return await self._get(self._people_url(account_id, "appsandusage"), params=params)
+
+    @staticmethod
+    def _parse_location_response(data: Any) -> dict[str, Any] | None:
+        if not isinstance(data, list) or len(data) < 2:
+            return None
+
+        child_data = data[1]
+        if not isinstance(child_data, list) or len(child_data) < 3:
+            return None
+
+        location_data = child_data[2]
+        if not isinstance(location_data, list) or len(location_data) < 2:
+            return None
+
+        coords = location_data[0]
+        if not isinstance(coords, list) or len(coords) < 2:
+            return None
+
+        try:
+            latitude = float(coords[0])
+            longitude = float(coords[1])
+        except (TypeError, ValueError):
+            return None
+
+        accuracy = None
+        if len(location_data) > 2 and location_data[2] not in (None, ""):
+            try:
+                accuracy = int(location_data[2])
+            except (TypeError, ValueError):
+                accuracy = None
+
+        timestamp = None
+        timestamp_iso = None
+        if len(location_data) > 1 and location_data[1] not in (None, ""):
+            try:
+                timestamp = int(location_data[1])
+                timestamp_iso = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).isoformat()
+            except (TypeError, ValueError, OSError):
+                timestamp = None
+                timestamp_iso = None
+
+        place_name = None
+        place_address = None
+        place_info = location_data[4] if len(location_data) > 4 else None
+        if isinstance(place_info, list):
+            if len(place_info) > 1 and isinstance(place_info[1], str):
+                place_name = place_info[1]
+            if len(place_info) > 2 and isinstance(place_info[2], str):
+                place_address = place_info[2]
+        if place_address is None and len(location_data) > 5 and isinstance(location_data[5], str):
+            place_address = location_data[5]
+
+        source_device_id = location_data[6] if len(location_data) > 6 and isinstance(location_data[6], str) else None
+
+        battery_level = None
+        if len(location_data) > 8 and isinstance(location_data[8], list) and location_data[8]:
+            try:
+                battery_level = int(location_data[8][0])
+            except (TypeError, ValueError):
+                battery_level = None
+
+        return {
+            "latitude": latitude,
+            "longitude": longitude,
+            "accuracy": accuracy,
+            "timestamp": timestamp_iso,
+            "source_device_id": source_device_id,
+            "place_name": place_name,
+            "place_address": place_address,
+            "battery_level": battery_level,
+        }
+
+    async def get_location(self, account_id: str, refresh: bool = False) -> dict[str, Any] | None:
+        """Get a child's GPS location and source-device battery level.
+
+        Ported from noiwid/HAFamilyLink's `async_get_location` (MIT licensed
+        -- see third_party/NOTICE.md). Google's protobuf-like response is a
+        positional array: coordinates at `[2][0]`, timestamp at `[2][1]`,
+        accuracy at `[2][2]`, optional place info at `[2][4]`, address at
+        `[2][5]`, source device ID at `[2][6]`, and battery at `[2][8][0]`.
+        """
+        self._validate_id(account_id, "account_id")
+        if not self.is_authenticated():
+            raise AuthenticationError("Not authenticated")
+
+        headers = {
+            **self._auth_headers(),
+            "Content-Type": "application/json+protobuf",
+            "Cookie": self._get_cookie_header(),
+        }
+        params = [
+            (
+                "locationRefreshMode",
+                self.LOCATION_REFRESH_MODE_REFRESH if refresh else self.LOCATION_REFRESH_MODE_DO_NOT_REFRESH,
+            ),
+            ("supportedConsents", "SUPERVISED_LOCATION_SHARING"),
+        ]
+        url = f"{self.BASE_URL}/families/mine/location/{account_id}"
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(url, params=params, headers=headers)
+        except httpx.HTTPError as err:
+            raise NetworkError(f"Request to {url} failed: {err}") from err
+
+        if resp.status_code == 401:
+            raise SessionExpiredError("Session expired, please re-authenticate")
+        if resp.status_code == 404:
+            _LOGGER.info("No location available for child %s", account_id)
+            return None
+        if resp.status_code != 200:
+            _LOGGER.warning("GET %s returned HTTP %s: %s", url, resp.status_code, resp.text[:500])
+            return None
+
+        try:
+            parsed = self._parse_location_response(resp.json())
+        except ValueError:
+            _LOGGER.warning("Location response for %s was not valid JSON", account_id)
+            return None
+
+        if not parsed:
+            _LOGGER.warning("Location response for %s had an unexpected shape", account_id)
+            return None
+
+        source_device_name = None
+        source_device_id = parsed.pop("source_device_id", None)
+        if source_device_id:
+            try:
+                apps_and_usage = await self.get_apps_and_usage(account_id)
+                for device in apps_and_usage.get("deviceInfo", []):
+                    if device.get("deviceId") != source_device_id:
+                        continue
+                    source_device_name = device.get("displayInfo", {}).get("friendlyName")
+                    break
+            except (AuthenticationError, NetworkError, SessionExpiredError, ValueError):
+                _LOGGER.debug("Could not resolve source device name for %s", source_device_id, exc_info=True)
+
+        return {
+            **parsed,
+            "source_device_name": source_device_name,
+        }
 
     @staticmethod
     def get_app_package_name(app: dict[str, Any]) -> str | None:

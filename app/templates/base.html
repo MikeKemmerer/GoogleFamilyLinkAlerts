@@ -6,6 +6,7 @@
   <title>{% block title %}Family Link Alerts{% endblock %}</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/style.css">
+  {% block extra_head %}{% endblock %}
   <script>
     // Applied before paint (no flash of the wrong theme). "auto" means no
     // data-theme attribute at all -- style.css's prefers-color-scheme media
@@ -62,7 +63,7 @@
   </nav>
   {% endif %}
   {% block content %}{% endblock %}
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>
-
 
