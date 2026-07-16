@@ -7,7 +7,7 @@
   {% endif %}
 {% endblock %}
 {% block content %}
-<h1><svg class="icon icon-lg"><use href="/static/icons.svg#icon-list"></use></svg>Change history</h1>
+<h1><svg class="icon icon-lg"><use href="#icon-list"></use></svg>Change history</h1>
 
 {% if children %}
 <form method="get" action="/history" class="filter-bar">
@@ -35,7 +35,7 @@
   <a class="btn" href="/history{% if selected_child_id %}?child_id={{ selected_child_id }}{% endif %}">Back to event list</a>
   {% elif location_history_href %}
   <a class="btn history-location-link" href="{{ location_history_href }}">
-    <svg class="icon"><use href="/static/icons.svg#icon-map-pin"></use></svg> View location history
+    <svg class="icon"><use href="#icon-map-pin"></use></svg> View location history
   </a>
   {% endif %}
 </form>
@@ -51,7 +51,7 @@
 
 {% if failures %}
 <div class="card">
-  <h2><svg class="icon"><use href="/static/icons.svg#icon-ban"></use></svg>Recent polling issues</h2>
+  <h2><svg class="icon"><use href="#icon-ban"></use></svg>Recent polling issues</h2>
   <table class="stack-mobile">
     <thead><tr><th>When</th><th>Kind</th><th>Detail</th></tr></thead>
     <tbody>
@@ -69,7 +69,7 @@
 
 {% if history_mode == "location" %}
 <div class="card">
-  <h2><svg class="icon"><use href="/static/icons.svg#icon-map-pin"></use></svg>Location history</h2>
+  <h2><svg class="icon"><use href="#icon-map-pin"></use></svg>Location history</h2>
   <p>
     {% if location_history.child_avatar_url %}<img class="avatar-md" src="{{ location_history.child_avatar_url }}" alt="">{% endif %}
     <strong>{{ location_history.child_name }}</strong>
@@ -105,7 +105,7 @@
 </div>
 {% else %}
 <div class="card">
-  <h2><svg class="icon"><use href="/static/icons.svg#icon-clock"></use></svg>Detected changes</h2>
+  <h2><svg class="icon"><use href="#icon-clock"></use></svg>Detected changes</h2>
   {% if category_filters %}
   <div class="history-category-pills">
     <a href="/history{% if selected_child_id %}?child_id={{ selected_child_id }}{% endif %}" class="badge {% if not selected_category %}badge-good{% endif %}">All categories</a>
@@ -113,7 +113,7 @@
       <a
         href="/history?category={{ category_filter.key }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}"
         class="badge {% if category_filter.key == selected_category %}badge-good{% endif %}"
-      ><svg class="icon"><use href="/static/icons.svg#icon-{{ category_filter.icon }}"></use></svg>{{ category_filter.label }}</a>
+      ><svg class="icon"><use href="#icon-{{ category_filter.icon }}"></use></svg>{{ category_filter.label }}</a>
     {% endfor %}
   </div>
   {% endif %}
@@ -137,7 +137,7 @@
         <td data-label="Change">
           <details>
             <summary>
-              <svg class="icon"><use href="/static/icons.svg#icon-{{ row.category_icon or 'bell' }}"></use></svg>
+              <svg class="icon"><use href="#icon-{{ row.category_icon or 'bell' }}"></use></svg>
               {% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}
               <span class="badge history-category-badge">{{ row.category_label }}</span>
             </summary>
@@ -179,7 +179,8 @@
   <script src="/static/leaflet/leaflet.js"></script>
   <script>
     (function () {
-      if (!window.L) return;
+      function initMap() {
+      if (!window.L) { console.error("Family Link Alerts: leaflet.js failed to load; map disabled."); return; }
       var fixes = JSON.parse(document.getElementById("location-history-fixes").textContent || "[]");
       if (!fixes.length) return;
       delete L.Icon.Default.prototype._getIconUrl;
@@ -200,6 +201,10 @@
       } else {
         map.setView(coords[0], 13);
       }
+      // Guards against the map being initialized while its container had a
+      // stale/zero layout size -- without this, tiles can render blank/grey
+      // until the window is manually resized.
+      setTimeout(function () { map.invalidateSize(); }, 150);
 
       var marker = L.marker(coords[coords.length - 1]).addTo(map);
       var accuracyCircle = null;
@@ -237,6 +242,12 @@
         renderFix(parseInt(slider.value, 10) || 0);
       });
       renderFix(parseInt(slider.value, 10) || 0);
+      }
+      if (document.readyState === "complete") {
+        initMap();
+      } else {
+        window.addEventListener("load", initMap);
+      }
     })();
   </script>
   {% endif %}

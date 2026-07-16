@@ -4,6 +4,37 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Fixed icon rendering reliability.** Icons are now inlined directly into
+  every page instead of being referenced from a separate `/static/icons.svg`
+  file via a cross-document `<use href="...">`. The external-file approach
+  was unreliable on some mobile browsers (symbols could silently fail to
+  render, especially once a browser had cached an older copy of the sprite
+  from before a given icon was added) -- inlining removes that entirely.
+  Also added the missing `stroke-width`/`stroke-linecap`/`stroke-linejoin`
+  defaults so icon strokes render at their intended weight instead of a
+  barely-visible 1px hairline.
+- **Fixed the logout/account nav items disappearing on narrow (phone-width)
+  screens.** The top nav bar didn't account for the extra items added by the
+  optional auth feature (username/role badge, logout button) -- on narrow
+  viewports the row could overflow its container (which clips instead of
+  wrapping), pushing the logout button off-screen. The username/role text
+  now hides (icon-only) below 640px instead of forcing an overflow.
+- **Fixed device-location maps sometimes rendering blank/grey.** Map
+  initialization now waits for the page to fully finish loading (instead of
+  running as soon as the script tag is reached) and calls
+  `invalidateSize()` shortly after creating the map, which is the standard
+  fix for Leaflet maps created while their container's layout hadn't fully
+  settled yet. Map init errors are now logged to the browser console
+  instead of failing silently.
+- **New: "Usage over the day" stacked-area chart** (Status page, under an
+  expandable "Usage over the day" disclosure below the existing per-app
+  usage summary bar). Shows cumulative per-app screen time across the hours
+  of the day. Important caveat: Family Link's API only reports a running
+  per-app *daily* total, with no per-session timestamps at all, so this
+  can't be computed retroactively -- the poller now records the usage
+  observed *since the previous poll* into the hour it was detected in, so
+  data only starts accumulating from when you upgrade to this version, at a
+  resolution limited by your poll interval.
 - **Fixed: location tracking couldn't actually be turned on.** The
   `location_tracking_enabled` setting added in the previous release had no
   UI control anywhere -- Settings now has a "Location" section with a

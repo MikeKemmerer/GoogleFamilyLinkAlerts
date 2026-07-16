@@ -670,6 +670,35 @@ def test_guest_status_hides_app_usage_without_screen_time_permission(monkeypatch
     assert "YouTube" not in resp.text
 
 
+def test_status_page_shows_hourly_usage_chart_when_buckets_recorded(monkeypatch, client, engine):
+    from app.db.models import AppUsageHourlyBucket
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=9, seconds=600.0,
+        ))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=14, seconds=300.0,
+        ))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Usage over the day" in resp.text
+    assert "app-usage-hourly-chart" in resp.text
+
+
 def test_status_page_skips_empty_app_usage_chart(monkeypatch, client, engine):
     monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
     monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)

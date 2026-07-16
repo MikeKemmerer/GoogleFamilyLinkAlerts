@@ -113,6 +113,44 @@ async def test_poll_once_detects_change_on_second_poll(monkeypatch, db_session):
         assert any(e.old_value == 60 and e.new_value == 30 for e in changed)
 
 
+async def test_poll_once_accumulates_hourly_app_usage_bucket_from_delta(monkeypatch, db_session):
+    """appUsageSessions only reports a running per-day total per app -- the
+    poller should record the *delta* observed since the last poll into the
+    current hour's bucket (see AppUsageHourlyBucket)."""
+    from sqlmodel import select
+    from app.db.models import AppUsageHourlyBucket
+
+    usage_day = {"year": 2026, "month": 7, "day": 20}
+    fake1 = FakeApiClient(apps_and_usage={
+        "apps": [],
+        "appUsageSessions": [
+            {"usage": "60s", "appId": {"androidAppPackageName": "com.example.app"}, "date": usage_day},
+        ],
+    })
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()
+
+    fake2 = FakeApiClient(apps_and_usage={
+        "apps": [],
+        "appUsageSessions": [
+            {"usage": "150s", "appId": {"androidAppPackageName": "com.example.app"}, "date": usage_day},
+        ],
+    })
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+    await poller.poll_once()
+
+    with Session(db_session) as s:
+        buckets = s.exec(select(AppUsageHourlyBucket)).all()
+        assert len(buckets) == 1
+        bucket = buckets[0]
+        assert bucket.child_id == "child1"
+        assert bucket.package_name == "com.example.app"
+        assert bucket.local_date == "2026-07-20"
+        # Only the delta (150 - 60 = 90s) should be recorded -- the first
+        # poll's 60s establishes the baseline with nothing to diff against.
+        assert bucket.seconds == pytest.approx(90.0)
+
+
 async def test_poll_once_omits_location_when_tracking_disabled(monkeypatch, db_session):
     from app.db.models import LatestSnapshot
 

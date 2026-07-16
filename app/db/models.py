@@ -143,6 +143,31 @@ class User(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class AppUsageHourlyBucket(SQLModel, table=True):
+    """Incremental per-app usage seconds, bucketed by the hour they were
+    *observed* during a poll (not necessarily the hour the usage actually
+    happened -- Family Link's `appUsageSessions` only reports a running
+    per-day total per app, with no per-session start/end timestamps at all,
+    so true minute-level attribution isn't possible from the API).
+
+    Built by app/poller.py: each poll cycle diffs the new per-app-per-day
+    total against the previous poll's total for that same (child, app,
+    date); the positive delta is added to the bucket for the current hour
+    (in the display timezone) of *this* poll. Resolution is therefore
+    limited to the poll interval, and only accumulates going forward from
+    when this feature shipped -- there is no way to backfill history that
+    predates it. Used to render the "Usage over the day" stacked area chart
+    on the Status page (app/web/status.py).
+    """
+
+    child_id: str = Field(primary_key=True, foreign_key="child.id")
+    package_name: str = Field(primary_key=True)
+    local_date: str = Field(primary_key=True, description="ISO date (YYYY-MM-DD) in the display timezone, matching appUsageSessions[].date")
+    hour: int = Field(primary_key=True, description="0-23, the display-timezone hour this poll ran in")
+    seconds: float = Field(default=0.0)
+    updated_at: datetime = Field(default_factory=_utcnow)
+
+
 class GuestPermission(SQLModel, table=True):
     """A single granular on/off toggle controlling what the (optional)
     no-password "Continue as guest" session is allowed to see.

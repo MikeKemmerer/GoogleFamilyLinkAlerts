@@ -1,7 +1,6 @@
 """Root status/dashboard page."""
 from __future__ import annotations
 
-import hashlib
 from datetime import date, datetime
 from typing import Any
 
@@ -12,8 +11,9 @@ from zoneinfo import ZoneInfo
 
 from ..config import settings
 from ..db import settings_store
-from ..db.models import Child, LatestSnapshot
+from ..db.models import AppUsageHourlyBucket, Child, LatestSnapshot
 from ..diff.labels import app_titles_from_snapshot, device_names_from_snapshot, format_minutes
+from ..familylink.app_usage import app_usage_color_var, format_usage_duration, usage_totals_by_app_and_date
 from ..poller import poll_once
 from . import guest_permissions
 from .deps import (
@@ -28,16 +28,6 @@ from .deps import (
 
 router = APIRouter()
 
-_APP_USAGE_COLOR_VARS = [
-    "--app-usage-color-1",
-    "--app-usage-color-2",
-    "--app-usage-color-3",
-    "--app-usage-color-4",
-    "--app-usage-color-5",
-    "--app-usage-color-6",
-    "--app-usage-color-7",
-    "--app-usage-color-8",
-]
 
 
 def _parse_location_timestamp(value: str | None) -> datetime | None:
@@ -59,35 +49,6 @@ def _battery_badge_class(level: int | None) -> str:
     return "badge-bad"
 
 
-def _parse_usage_seconds(value: Any) -> float | None:
-    """Parse Family Link's app-usage duration strings like ``"123.4s"``."""
-    if not isinstance(value, str) or not value.endswith("s"):
-        return None
-    try:
-        seconds = float(value[:-1])
-    except ValueError:
-        return None
-    return seconds if seconds > 0 else None
-
-
-def _format_usage_duration(seconds: float) -> str:
-    total_seconds = max(0, int(round(seconds)))
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds_part = divmod(remainder, 60)
-    if hours and minutes:
-        return f"{hours}h {minutes}m"
-    if hours:
-        return f"{hours}h"
-    if minutes:
-        return f"{minutes}m"
-    return f"{seconds_part}s"
-
-
-def _app_usage_color_var(package_name: str) -> str:
-    digest = hashlib.sha1(package_name.encode("utf-8")).digest()
-    return _APP_USAGE_COLOR_VARS[digest[0] % len(_APP_USAGE_COLOR_VARS)]
-
-
 def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date: date) -> list[dict[str, Any]]:
     """Aggregate ``appUsageSessions`` for one local calendar day."""
     if not isinstance(apps_and_usage, dict):
@@ -95,24 +56,8 @@ def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date:
 
     app_titles = app_titles_from_snapshot({"apps_and_usage": apps_and_usage})
     totals: dict[str, float] = {}
-    for session in apps_and_usage.get("appUsageSessions") or []:
-        if not isinstance(session, dict):
-            continue
-        session_date = session.get("date") or {}
-        if (
-            session_date.get("year") != target_date.year
-            or session_date.get("month") != target_date.month
-            or session_date.get("day") != target_date.day
-        ):
-            continue
-        app_id = session.get("appId") or {}
-        if not isinstance(app_id, dict):
-            continue
-        package_name = app_id.get("androidAppPackageName")
-        if not isinstance(package_name, str) or not package_name:
-            continue
-        seconds = _parse_usage_seconds(session.get("usage"))
-        if seconds is None:
+    for (package_name, session_date), seconds in usage_totals_by_app_and_date(apps_and_usage).items():
+        if session_date != target_date:
             continue
         totals[package_name] = totals.get(package_name, 0.0) + seconds
 
@@ -125,14 +70,102 @@ def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date:
             "package_name": package_name,
             "app_title": app_titles.get(package_name, package_name),
             "seconds": seconds,
-            "duration_display": _format_usage_duration(seconds),
+            "duration_display": format_usage_duration(seconds),
             "width_pct": (seconds / total_seconds) * 100,
-            "color_var": _app_usage_color_var(package_name),
+            "color_var": app_usage_color_var(package_name),
         }
         for package_name, seconds in totals.items()
     ]
     usage.sort(key=lambda item: (-item["seconds"], item["app_title"].casefold(), item["package_name"]))
     return usage
+
+
+def _build_hourly_app_usage_chart(
+    session: Session, child_id: str, target_date: date, app_titles: dict[str, str]
+) -> dict[str, Any] | None:
+    """Build a stacked-area "usage over the day" chart from the hourly
+    buckets the poller accumulates (see AppUsageHourlyBucket). Returns None
+    if there's nothing recorded yet for this child/day -- e.g. the feature
+    was only just enabled, so no deltas have been observed yet.
+    """
+    rows = session.exec(
+        select(AppUsageHourlyBucket).where(
+            AppUsageHourlyBucket.child_id == child_id,
+            AppUsageHourlyBucket.local_date == target_date.isoformat(),
+        )
+    ).all()
+    if not rows:
+        return None
+
+    seconds_by_app_hour: dict[str, dict[int, float]] = {}
+    totals_by_app: dict[str, float] = {}
+    for row in rows:
+        seconds_by_app_hour.setdefault(row.package_name, {})[row.hour] = row.seconds
+        totals_by_app[row.package_name] = totals_by_app.get(row.package_name, 0.0) + row.seconds
+
+    if not totals_by_app:
+        return None
+
+    # Order apps by total usage (most-used first) so the stack order/legend
+    # matches the existing summary bar's ordering convention.
+    ordered_packages = sorted(
+        totals_by_app,
+        key=lambda pkg: (-totals_by_app[pkg], app_titles.get(pkg, pkg).casefold(), pkg),
+    )
+
+    max_cumulative = 0.0
+    series = []
+    for package_name in ordered_packages:
+        hourly = seconds_by_app_hour.get(package_name, {})
+        cumulative_minutes = []
+        running_total = 0.0
+        for hour in range(24):
+            running_total += hourly.get(hour, 0.0)
+            cumulative_minutes.append(running_total / 60.0)
+        max_cumulative = max(max_cumulative, cumulative_minutes[-1])
+        series.append(
+            {
+                "package_name": package_name,
+                "app_title": app_titles.get(package_name, package_name),
+                "color_var": app_usage_color_var(package_name),
+                "cumulative_minutes": cumulative_minutes,
+                "total_display": format_usage_duration(totals_by_app[package_name]),
+            }
+        )
+
+    if max_cumulative <= 0:
+        return None
+
+    # Build an SVG stacked-area chart by hand (no charting library, matching
+    # the project's no-CDN/no-JS-framework convention) -- one <path> per
+    # app, each drawn as the band between its own cumulative-total polyline
+    # and the previous app's, so the bands stack visually.
+    chart_width, chart_height = 720, 220
+    def x_for_hour(hour: int) -> float:
+        return (hour / 23) * chart_width
+
+    def y_for_minutes(minutes: float) -> float:
+        return chart_height - (minutes / max_cumulative) * chart_height
+
+    running_top = [0.0] * 24
+    for layer in series:
+        bottom = list(running_top)
+        top = [bottom[h] + layer["cumulative_minutes"][h] for h in range(24)]
+        top_points = " ".join(f"{x_for_hour(h):.1f},{y_for_minutes(top[h]):.1f}" for h in range(24))
+        bottom_points = " ".join(
+            f"{x_for_hour(h):.1f},{y_for_minutes(bottom[h]):.1f}" for h in range(23, -1, -1)
+        )
+        layer["path"] = f"M {top_points} L {bottom_points} Z"
+        running_top = top
+
+    hour_labels = [f"{h:02d}:00" for h in (0, 6, 12, 18, 23)]
+    return {
+        "series": series,
+        "chart_width": chart_width,
+        "chart_height": chart_height,
+        "hour_labels": hour_labels,
+        "max_display": format_usage_duration(max_cumulative * 60),
+    }
 
 
 def _build_location_context(raw_location: dict | None, tz: ZoneInfo) -> dict | None:
@@ -302,6 +335,12 @@ def _build_device_summaries(
             "app_usage_today": (
                 _build_app_usage_for_day(apps_and_usage, local_today)
                 if show_screen_time else []
+            ),
+            "app_usage_hourly": (
+                _build_hourly_app_usage_chart(
+                    session, child.id, local_today, app_titles_from_snapshot({"apps_and_usage": apps_and_usage})
+                )
+                if show_screen_time else None
             ),
         })
     return summaries

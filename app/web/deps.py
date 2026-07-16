@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from sqlmodel import Session, select
 
 from ..config import settings
@@ -16,6 +17,21 @@ from ..db.models import LatestSnapshot, User
 from ..db.session import get_engine
 
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
+
+# The icon sprite is inlined directly into every page (instead of being
+# referenced as an external file via `<use href="/static/icons.svg#id">`)
+# because cross-document external `<use>` references are unreliable on some
+# mobile browsers (notably iOS Safari) -- symbols can silently fail to
+# render, especially inside elements that aren't visible at first paint, or
+# once a browser has cached an older copy of the sprite file from before a
+# given icon was added. Inlining removes the extra network/cache round trip
+# entirely and guarantees every symbol referenced by `#icon-x` is always
+# present in the same document. `app/static/icons.svg` remains the single
+# source of truth for the icon definitions; this just reads it once at
+# import time and exposes it to templates as `icon_sprite()`.
+_ICON_SPRITE_PATH = Path(__file__).resolve().parent.parent / "static" / "icons.svg"
+_icon_sprite_markup = Markup(_ICON_SPRITE_PATH.read_text(encoding="utf-8"))
+templates.env.globals["icon_sprite"] = lambda: _icon_sprite_markup
 
 # Session keys used in the signed cookie (see app/main.py's SessionMiddleware).
 SESSION_KEY_USER_ID = "user_id"

@@ -19,11 +19,12 @@ from sqlmodel import Session, select
 
 from .config import settings
 from .db import settings_store
-from .db.models import AppRule, ChangeEvent, Child, LatestSnapshot, PollFailure
+from .db.models import AppRule, AppUsageHourlyBucket, ChangeEvent, Child, LatestSnapshot, PollFailure
 from .db.session import get_session
 from .diff.engine import diff_snapshots
 from .diff.labels import app_titles_from_snapshot, device_names_from_snapshot
 from .familylink.api_client import FamilyLinkApiClient
+from .familylink.app_usage import hourly_usage_deltas
 from .familylink.auth_client import AuthClient
 from .familylink.exceptions import AuthenticationError, FamilyLinkError, NetworkError, SessionExpiredError
 from .familylink.website_filter import WebsiteFilterNotImplementedError, get_website_filter
@@ -436,6 +437,35 @@ async def _maybe_notify_bonus_revoked(
         session.commit()
 
 
+def _accumulate_hourly_app_usage(
+    session: Session, child_id: str, old_snapshot: dict, new_snapshot: dict, tz
+) -> None:
+    """Bucket newly-observed app-usage seconds into the current display-
+    timezone hour (see AppUsageHourlyBucket for why this is an
+    approximation, not a true per-minute breakdown).
+    """
+    deltas = hourly_usage_deltas(
+        old_snapshot.get("apps_and_usage"), new_snapshot.get("apps_and_usage")
+    )
+    if not deltas:
+        return
+
+    now_local = datetime.now(tz)
+    hour = now_local.hour
+    for (package_name, local_date), delta_seconds in deltas.items():
+        bucket = session.get(
+            AppUsageHourlyBucket, (child_id, package_name, local_date.isoformat(), hour)
+        )
+        if bucket is None:
+            bucket = AppUsageHourlyBucket(
+                child_id=child_id, package_name=package_name, local_date=local_date.isoformat(), hour=hour
+            )
+        bucket.seconds += delta_seconds
+        bucket.updated_at = datetime.now(timezone.utc)
+        session.add(bucket)
+    session.commit()
+
+
 async def poll_once() -> None:
     """Run a single poll cycle across all enabled children."""
     with get_session() as session:
@@ -523,6 +553,8 @@ async def poll_once() -> None:
             session.commit()
             for e in events:
                 session.refresh(e)
+
+            _accumulate_hourly_app_usage(session, child.id, latest.data, new_snapshot, tz)
 
             app_titles = app_titles_from_snapshot(new_snapshot)
             if events:

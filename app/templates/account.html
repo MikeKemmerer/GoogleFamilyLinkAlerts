@@ -28,8 +28,8 @@
     <div class="pill-toggle">
       <label><input type="radio" name="theme" value="" {% if not user_theme %}checked{% endif %}><span>Use the site default</span></label>
       <label><input type="radio" name="theme" value="auto" {% if user_theme == "auto" %}checked{% endif %}><span>Auto</span></label>
-      <label><input type="radio" name="theme" value="light" {% if user_theme == "light" %}checked{% endif %}><span><svg class="icon"><use href="/static/icons.svg#icon-sun"></use></svg>Light</span></label>
-      <label><input type="radio" name="theme" value="dark" {% if user_theme == "dark" %}checked{% endif %}><span><svg class="icon"><use href="/static/icons.svg#icon-moon"></use></svg>Dark</span></label>
+      <label><input type="radio" name="theme" value="light" {% if user_theme == "light" %}checked{% endif %}><span><svg class="icon"><use href="#icon-sun"></use></svg>Light</span></label>
+      <label><input type="radio" name="theme" value="dark" {% if user_theme == "dark" %}checked{% endif %}><span><svg class="icon"><use href="#icon-moon"></use></svg>Dark</span></label>
     </div>
     <button type="submit">Save</button>
   </form>

@@ -89,7 +89,10 @@ h2 { font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
 a { color: var(--accent); }
 a:hover { color: var(--accent-hover); }
 
-.icon { width: 1em; height: 1em; stroke: currentColor; fill: none; flex-shrink: 0; }
+.icon {
+  width: 1em; height: 1em; stroke: currentColor; fill: none; flex-shrink: 0;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
 .icon-lg { width: 1.4em; height: 1.4em; }
 
 /* Site brand/logo, shown above the nav on every page. */
@@ -109,10 +112,16 @@ a:hover { color: var(--accent-hover); }
   border-radius: 10px; overflow: hidden; margin-bottom: 1.25rem; box-shadow: var(--shadow);
 }
 .top-nav a {
-  flex: 1 1 0; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
   padding: 0.6rem 0.4rem; text-decoration: none; color: var(--text-muted);
   font-size: 0.8rem; font-weight: 600; border-bottom: 2px solid transparent;
 }
+/* nav-account's username/badge text is the most likely thing to force the
+   whole .top-nav row (which has overflow: hidden and doesn't wrap) wider
+   than the viewport on narrow screens -- clipping later items like the
+   logout button off the right edge entirely. Let it shrink and truncate
+   instead of forcing the row to overflow. */
+.top-nav a.nav-account { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top-nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
 .top-nav a:hover { background: var(--surface-alt); }
 .theme-toggle-form { flex: 0 0 auto; margin: 0; display: flex; }
@@ -236,6 +245,13 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
   width: 0.8rem; height: 0.8rem; border-radius: 999px; flex: 0 0 auto;
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
+.app-usage-hourly-details { margin-top: 0.75rem; }
+.app-usage-hourly-details summary {
+  cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--accent);
+}
+.app-usage-hourly-chart { margin-top: 0.6rem; }
+.app-usage-hourly-chart svg { width: 100%; height: 160px; display: block; }
+.app-usage-hourly-axis { display: flex; justify-content: space-between; margin-top: 0.2rem; }
 .leaflet-container {
   color: var(--text); font: inherit; background: var(--surface);
 }
@@ -272,6 +288,7 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
   h1 { font-size: 1.25rem; }
   .card { padding: 0.9rem; }
   .top-nav a { font-size: 0.72rem; padding: 0.55rem 0.2rem; }
+  .top-nav a.nav-account .nav-account-name, .top-nav a.nav-account .badge { display: none; }
   table.stack-mobile thead { display: none; }
   table.stack-mobile, table.stack-mobile tbody, table.stack-mobile tr,
   table.stack-mobile td { display: block; width: 100% !important; }
