@@ -179,6 +179,12 @@
             var map = L.map(el, { attributionControl: false, zoomControl: false });
             L.tileLayer("/tiles/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
             var point = [lat, lng];
+            // Establish an initial view before adding any layer whose
+            // bounds Leaflet needs to project (e.g. the accuracy circle
+            // below) -- circle.getBounds() requires the map to already
+            // have an active view/zoom, otherwise it throws because the
+            // circle was never fully attached (this._map stays undefined).
+            map.setView(point, 13);
             L.marker(point).addTo(map);
             if (Number.isFinite(accuracy) && accuracy > 0) {
               var circle = L.circle(point, {
@@ -189,8 +195,6 @@
                 weight: 1
               }).addTo(map);
               map.fitBounds(circle.getBounds(), { padding: [16, 16] });
-            } else {
-              map.setView(point, 13);
             }
             el.dataset.initialized = "true";
             // Guards against maps initialized while their container had a

@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Fixed device-location maps on the Status page never rendering at all
+  when accuracy data was present.** The accuracy-circle overlay's
+  `getBounds()` was being called before the map had an initial view/zoom
+  set, which throws in Leaflet (the circle never finishes attaching to the
+  map) -- the whole map init silently failed as a result. The map now
+  always gets an initial `setView()` before any bounds-dependent layer is
+  added, so it renders correctly.
 - **Fixed icon rendering reliability.** Icons are now inlined directly into
   every page instead of being referenced from a separate `/static/icons.svg`
   file via a cross-document `<use href="...">`. The external-file approach
