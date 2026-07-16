@@ -71,6 +71,12 @@ def test_is_ignored_path_matches_raw_time_limit_regardless_of_index():
     assert not is_ignored_path("applied_time_limits.devices.dev1.remaining_minutes")
 
 
+def test_is_ignored_path_ignores_bonus_override_id_but_not_user_facing_bonus_fields():
+    assert is_ignored_path("applied_time_limits.devices.dev1.bonus_override_id")
+    assert not is_ignored_path("applied_time_limits.devices.dev1.bonus_minutes")
+    assert not is_ignored_path("applied_time_limits.devices.dev1.bonus_granted_by")
+
+
 def test_is_ignored_path_matches_noisy_device_metadata():
     assert is_ignored_path("apps_and_usage.deviceInfo[0].displayInfo.thumbnail.imageUrl")
     assert is_ignored_path("apps_and_usage.deviceInfo[3].displayInfo.lastActivityTimeMillis")

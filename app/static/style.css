@@ -24,6 +24,14 @@
   --ok-bg: #dcf3e3; --ok-text: #146c3a;
   --warn-bg: #fbead0; --warn-text: #8a5a10;
   --danger-bg: #fbe1de; --danger-text: #9c2b1f;
+  --app-usage-color-1: #e2762f;
+  --app-usage-color-2: #5f9df7;
+  --app-usage-color-3: #7a56d1;
+  --app-usage-color-4: #24a19c;
+  --app-usage-color-5: #d14d72;
+  --app-usage-color-6: #b78b20;
+  --app-usage-color-7: #3d8b58;
+  --app-usage-color-8: #8d5a97;
   --shadow: 0 1px 2px rgba(30, 25, 15, 0.06);
 }
 
@@ -40,6 +48,14 @@
   --ok-bg: #16371f; --ok-text: #7fdc9e;
   --warn-bg: #3d2c0f; --warn-text: #f0c473;
   --danger-bg: #3c1811; --danger-text: #f4a091;
+  --app-usage-color-1: #f2a562;
+  --app-usage-color-2: #7ab4ff;
+  --app-usage-color-3: #9c7bf1;
+  --app-usage-color-4: #46c2bb;
+  --app-usage-color-5: #f07a9c;
+  --app-usage-color-6: #e0b44e;
+  --app-usage-color-7: #5eb879;
+  --app-usage-color-8: #b57cc2;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -198,6 +214,27 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
 .device-location-map {
   height: 190px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface);
+}
+.app-usage-panel {
+  margin-top: 0.75rem; padding: 0.75rem; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--surface-alt);
+}
+.app-usage-title { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.app-usage-chart {
+  display: flex; width: 100%; min-height: 1.15rem; overflow: hidden;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+}
+.app-usage-segment { display: block; min-width: 0; }
+.app-usage-legend {
+  list-style: none; padding: 0; margin: 0.6rem 0 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.4rem 0.75rem;
+}
+.app-usage-legend-item {
+  display: flex; align-items: center; gap: 0.45rem; min-width: 0;
+}
+.app-usage-swatch {
+  width: 0.8rem; height: 0.8rem; border-radius: 999px; flex: 0 0 auto;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 .leaflet-container {
   color: var(--text); font: inherit; background: var(--surface);

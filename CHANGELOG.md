@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Fixed: location tracking couldn't actually be turned on.** The
+  `location_tracking_enabled` setting added in the previous release had no
+  UI control anywhere -- Settings now has a "Location" section with a
+  "Location tracking" checkbox (admin only) so the Status page's
+  map/battery display can actually be enabled.
+- Bonus/extra time notifications and History no longer show the raw,
+  meaningless bonus-time override ID. Instead, when Family Link records
+  which parent/guardian granted the bonus, this app now shows "granted by
+  <name>" alongside the existing bonus-minutes entry. This relies on an
+  unconfirmed field position in Google's undocumented API, so it's
+  designed to fail silently (show nothing extra) rather than show
+  incorrect data if that assumption turns out to be wrong for your account.
+- Status page: added a stacked per-app usage chart (with legend) showing
+  how a child's screen time today is split across individual apps, using
+  data Family Link already reports per poll. This is purely a display
+  addition -- no new History/notification entries are generated for
+  per-app usage (that data was already excluded from change-tracking to
+  avoid noise).
 - **New optional feature: device location & battery.** Off by default --
   turn on "Location tracking" in Settings to start recording each child's
   last-known device location (latitude/longitude/accuracy/place name) and

@@ -12,7 +12,7 @@ class FakeApiClient:
 
     def __init__(self, apps_and_usage=None, time_limit=None, applied_time_limits=None,
                  location=None, raise_on_authenticate=None, raise_on_fetch=None,
-                 raise_on_block=None, raise_on_cancel_bonus=None):
+                 raise_on_block=None, raise_on_cancel_bonus=None, family_members=None):
         self._apps_and_usage = apps_and_usage or {"apps": []}
         self._time_limit = time_limit or {}
         self._applied_time_limits = applied_time_limits or {}
@@ -21,6 +21,7 @@ class FakeApiClient:
         self._raise_on_fetch = raise_on_fetch
         self._raise_on_block = raise_on_block
         self._raise_on_cancel_bonus = raise_on_cancel_bonus
+        self._family_members = family_members or {"members": []}
         self.blocked: list[tuple[str, str]] = []
         self.cancelled_bonuses: list[tuple[str, str]] = []
         self.location_requests: list[tuple[str, bool]] = []
@@ -57,7 +58,7 @@ class FakeApiClient:
     async def get_family_members(self):
         # Avatar refresh is a best-effort, once-per-cycle side effect;
         # returning no members means _refresh_child_avatars is a no-op.
-        return {"members": []}
+        return self._family_members
 
 
 @pytest.fixture
@@ -574,6 +575,67 @@ async def test_poll_once_logs_but_continues_when_cancel_bonus_fails(monkeypatch,
 
     # Should not raise -- enforcement failures are logged, not fatal.
     await poller.poll_once()
+
+
+async def test_poll_once_resolves_bonus_granted_by_from_family_member(monkeypatch, db_session):
+    from app.db.models import ChangeEvent, LatestSnapshot
+    from sqlmodel import select
+
+    fake1 = FakeApiClient(applied_time_limits={"devices": {"dev1": {"bonus_minutes": 0, "bonus_granted_by": None}}})
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake1)
+    await poller.poll_once()
+
+    applied_time_limits = {
+        "devices": {
+            "dev1": {
+                "bonus_minutes": 10,
+                "bonus_override_id": "override1",
+                "bonus_granted_by_id": "parent1",
+                "bonus_granted_by": None,
+            },
+        },
+    }
+    family_members = {"members": [{"userId": "parent1", "profile": {"displayName": "Mom"}}]}
+    fake2 = FakeApiClient(applied_time_limits=applied_time_limits, family_members=family_members)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake2)
+
+    await poller.poll_once()
+
+    with Session(db_session) as s:
+        latest = s.get(LatestSnapshot, "child1")
+        device = latest.data["applied_time_limits"]["devices"]["dev1"]
+        assert device["bonus_granted_by"] == "Mom"
+
+        event = s.exec(select(ChangeEvent).where(
+            ChangeEvent.field_path == "applied_time_limits.devices.dev1.bonus_granted_by"
+        )).one()
+        assert event.old_value is None
+        assert event.new_value == "Mom"
+
+
+async def test_poll_once_omits_bonus_granted_by_when_family_member_id_is_unresolved(monkeypatch, db_session):
+    from app.db.models import LatestSnapshot
+
+    applied_time_limits = {
+        "devices": {
+            "dev1": {
+                "bonus_minutes": 10,
+                "bonus_override_id": "override1",
+                "bonus_granted_by_id": "unknown-parent",
+                "bonus_granted_by": None,
+            },
+        },
+    }
+    family_members = {"members": [{"userId": "parent1", "profile": {"displayName": "Mom"}}]}
+    fake = FakeApiClient(applied_time_limits=applied_time_limits, family_members=family_members)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    with Session(db_session) as s:
+        latest = s.get(LatestSnapshot, "child1")
+        device = latest.data["applied_time_limits"]["devices"]["dev1"]
+        assert device["bonus_granted_by"] is None
 
 
 async def test_poll_once_skips_ntfy_send_when_notifications_disabled(monkeypatch, db_session):

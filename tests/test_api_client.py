@@ -42,6 +42,20 @@ def _applied_time_limits_payload(day: int) -> list:
     return [None, [device_data]]
 
 
+def _bonus_override_payload(granted_by_id, *, override_id: str = "override1", bonus_seconds: str = "600") -> list:
+    device_data: list = [None] * 26
+    override: list = [None] * 14
+    override[0] = override_id
+    override[2] = 10
+    override[3] = "device1"
+    override[8] = granted_by_id
+    override[13] = [[bonus_seconds]]
+    device_data[0] = override
+    device_data[20] = "0"
+    device_data[25] = "device1"
+    return [None, [device_data]]
+
+
 def test_parse_applied_time_limits_matches_schedule_day_in_local_timezone(monkeypatch):
     monkeypatch.setattr("app.familylink.api_client.datetime", _FrozenDatetime)
     # Schedule day 7 (Sunday) matches America/New_York's local day at this
@@ -65,6 +79,27 @@ def test_parse_applied_time_limits_defaults_to_utc_when_no_tz_given(monkeypatch)
 
     result = FamilyLinkApiClient._parse_applied_time_limits(data)
     assert result["bedtime_enabled_today"] is True
+
+
+def test_parse_applied_time_limits_extracts_bonus_granted_by_id():
+    data = _bonus_override_payload("parent-profile-1")
+
+    result = FamilyLinkApiClient._parse_applied_time_limits(data)
+
+    device = result["devices"]["device1"]
+    assert device["bonus_minutes"] == 10
+    assert device["bonus_override_id"] == "override1"
+    assert device["bonus_granted_by_id"] == "parent-profile-1"
+    assert device["bonus_granted_by"] is None
+
+
+@pytest.mark.parametrize("granted_by_id", [None, "", "device1", "override1", ["not-a-string"]])
+def test_parse_applied_time_limits_ignores_implausible_bonus_granted_by_id(granted_by_id):
+    data = _bonus_override_payload(granted_by_id)
+
+    result = FamilyLinkApiClient._parse_applied_time_limits(data)
+
+    assert result["devices"]["device1"]["bonus_granted_by_id"] is None
 
 
 def test_get_app_package_name_prefers_flat_packageName_field():

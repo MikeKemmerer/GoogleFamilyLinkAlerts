@@ -246,6 +246,15 @@ def test_contributor_can_toggle_child_but_not_post_global_settings(client, engin
     assert resp.status_code == 403
 
 
+def test_contributor_cannot_toggle_location_tracking(client, engine):
+    make_admin(engine)
+    make_user(engine, "contrib", "contribpass123", "contributor")
+    client.post("/login", data={"username": "contrib", "password": "contribpass123"})
+
+    resp = client.post("/settings/location-tracking/toggle")
+    assert resp.status_code == 403
+
+
 def test_viewer_cannot_reach_settings(client, engine):
     make_admin(engine)
     make_user(engine, "viewer1", "viewerpass123", "viewer")

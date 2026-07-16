@@ -38,7 +38,7 @@ _CATEGORY_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     ), "screen_time"),
     (re.compile(
         r"^applied_time_limits\.devices\.[^.]+\."
-        r"(bonus_minutes|bonus_override_id)$"
+        r"(bonus_minutes|bonus_override_id|bonus_granted_by)$"
     ), "bonus_time"),
     (re.compile(r"^applied_time_limits\.(bedtime_enabled_today|schooltime_enabled_today)$"), "bedtime_schooltime"),
     (re.compile(

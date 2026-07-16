@@ -59,8 +59,8 @@ _KNOWN_LABELS: list[tuple[re.Pattern, str]] = [
      "{device}: school time active right now"),
     (re.compile(rf"^applied_time_limits\.devices\.{_DEVICE_ID_GROUP}\.bonus_minutes$"),
      "{device}: bonus time granted"),
-    (re.compile(rf"^applied_time_limits\.devices\.{_DEVICE_ID_GROUP}\.bonus_override_id$"),
-     "{device}: bonus time override id"),
+    (re.compile(rf"^applied_time_limits\.devices\.{_DEVICE_ID_GROUP}\.bonus_granted_by$"),
+     "{device}: bonus time granted by"),
     # `apps_and_usage.apps[N].supervisionSetting.hidden` is what flips when
     # an app gets blocked/unblocked (manually, or via the always-blocked
     # enforcement in app/poller.py). poller.py rewrites the raw positional
@@ -198,4 +198,3 @@ def app_icons_from_snapshot(snapshot_data: dict[str, Any] | None) -> dict[str, s
         if package_name and icon_url:
             icons[package_name] = icon_url
     return icons
-

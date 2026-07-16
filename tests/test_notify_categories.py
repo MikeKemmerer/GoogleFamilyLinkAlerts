@@ -17,7 +17,7 @@ def test_category_for_field_path_screen_time():
 
 
 def test_category_for_field_path_bonus_time():
-    for suffix in ("bonus_minutes", "bonus_override_id"):
+    for suffix in ("bonus_minutes", "bonus_override_id", "bonus_granted_by"):
         assert category_for_field_path(f"applied_time_limits.devices.dev1.{suffix}") == "bonus_time"
 
 

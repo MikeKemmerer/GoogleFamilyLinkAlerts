@@ -1,7 +1,9 @@
 """Root status/dashboard page."""
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+from datetime import date, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -11,7 +13,7 @@ from zoneinfo import ZoneInfo
 from ..config import settings
 from ..db import settings_store
 from ..db.models import Child, LatestSnapshot
-from ..diff.labels import device_names_from_snapshot, format_minutes
+from ..diff.labels import app_titles_from_snapshot, device_names_from_snapshot, format_minutes
 from ..poller import poll_once
 from . import guest_permissions
 from .deps import (
@@ -25,6 +27,17 @@ from .deps import (
 )
 
 router = APIRouter()
+
+_APP_USAGE_COLOR_VARS = [
+    "--app-usage-color-1",
+    "--app-usage-color-2",
+    "--app-usage-color-3",
+    "--app-usage-color-4",
+    "--app-usage-color-5",
+    "--app-usage-color-6",
+    "--app-usage-color-7",
+    "--app-usage-color-8",
+]
 
 
 def _parse_location_timestamp(value: str | None) -> datetime | None:
@@ -44,6 +57,82 @@ def _battery_badge_class(level: int | None) -> str:
     if level >= 25:
         return "badge-warn"
     return "badge-bad"
+
+
+def _parse_usage_seconds(value: Any) -> float | None:
+    """Parse Family Link's app-usage duration strings like ``"123.4s"``."""
+    if not isinstance(value, str) or not value.endswith("s"):
+        return None
+    try:
+        seconds = float(value[:-1])
+    except ValueError:
+        return None
+    return seconds if seconds > 0 else None
+
+
+def _format_usage_duration(seconds: float) -> str:
+    total_seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds_part = divmod(remainder, 60)
+    if hours and minutes:
+        return f"{hours}h {minutes}m"
+    if hours:
+        return f"{hours}h"
+    if minutes:
+        return f"{minutes}m"
+    return f"{seconds_part}s"
+
+
+def _app_usage_color_var(package_name: str) -> str:
+    digest = hashlib.sha1(package_name.encode("utf-8")).digest()
+    return _APP_USAGE_COLOR_VARS[digest[0] % len(_APP_USAGE_COLOR_VARS)]
+
+
+def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date: date) -> list[dict[str, Any]]:
+    """Aggregate ``appUsageSessions`` for one local calendar day."""
+    if not isinstance(apps_and_usage, dict):
+        return []
+
+    app_titles = app_titles_from_snapshot({"apps_and_usage": apps_and_usage})
+    totals: dict[str, float] = {}
+    for session in apps_and_usage.get("appUsageSessions") or []:
+        if not isinstance(session, dict):
+            continue
+        session_date = session.get("date") or {}
+        if (
+            session_date.get("year") != target_date.year
+            or session_date.get("month") != target_date.month
+            or session_date.get("day") != target_date.day
+        ):
+            continue
+        app_id = session.get("appId") or {}
+        if not isinstance(app_id, dict):
+            continue
+        package_name = app_id.get("androidAppPackageName")
+        if not isinstance(package_name, str) or not package_name:
+            continue
+        seconds = _parse_usage_seconds(session.get("usage"))
+        if seconds is None:
+            continue
+        totals[package_name] = totals.get(package_name, 0.0) + seconds
+
+    if not totals:
+        return []
+
+    total_seconds = sum(totals.values())
+    usage = [
+        {
+            "package_name": package_name,
+            "app_title": app_titles.get(package_name, package_name),
+            "seconds": seconds,
+            "duration_display": _format_usage_duration(seconds),
+            "width_pct": (seconds / total_seconds) * 100,
+            "color_var": _app_usage_color_var(package_name),
+        }
+        for package_name, seconds in totals.items()
+    ]
+    usage.sort(key=lambda item: (-item["seconds"], item["app_title"].casefold(), item["package_name"]))
+    return usage
 
 
 def _build_location_context(raw_location: dict | None, tz: ZoneInfo) -> dict | None:
@@ -123,16 +212,19 @@ def _build_device_summaries(
     location / battery detail they haven't been explicitly granted (see
     app/web/guest_permissions.py).
     """
+    show_screen_time = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:screen_time")
     show_bonus = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:bonus_time")
     show_bedtime_schooltime = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:bedtime_schooltime")
     show_location = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:location")
     show_battery = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:battery")
     location_tracking_enabled = settings_store.get_location_tracking_enabled(session)
+    local_today = datetime.now(tz).date()
 
     summaries = []
     for child in children:
         snapshot = session.get(LatestSnapshot, child.id)
         data = snapshot.data if snapshot else {}
+        apps_and_usage = (data or {}).get("apps_and_usage") or {}
         applied = (data or {}).get("applied_time_limits", {}) or {}
         device_names = device_names_from_snapshot(data)
         lock_states = applied.get("device_lock_states", {}) or {}
@@ -207,6 +299,10 @@ def _build_device_summaries(
             "total_used_display": format_minutes(total_used_minutes),
             "devices": devices,
             "location": summary_location,
+            "app_usage_today": (
+                _build_app_usage_for_day(apps_and_usage, local_today)
+                if show_screen_time else []
+            ),
         })
     return summaries
 

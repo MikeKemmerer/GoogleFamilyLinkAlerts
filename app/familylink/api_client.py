@@ -548,6 +548,8 @@ class FamilyLinkApiClient:
                 "schooltime_active": False,
                 "bonus_minutes": 0,
                 "bonus_override_id": None,
+                "bonus_granted_by_id": None,
+                "bonus_granted_by": None,
             }
 
             # Bonus override lives in device_data[0] when type == 10. Its
@@ -560,6 +562,18 @@ class FamilyLinkApiClient:
                     if isinstance(bonus_seconds_str, str) and bonus_seconds_str.isdigit():
                         device_info["bonus_minutes"] = int(bonus_seconds_str) // 60
                         device_info["bonus_override_id"] = override[0]
+                except (IndexError, TypeError):
+                    pass
+                try:
+                    granted_by_id = override[8]
+                    override_id = device_info["bonus_override_id"]
+                    if (
+                        isinstance(granted_by_id, str)
+                        and granted_by_id.strip()
+                        and granted_by_id != device_id
+                        and granted_by_id != override_id
+                    ):
+                        device_info["bonus_granted_by_id"] = granted_by_id
                 except (IndexError, TypeError):
                     pass
 

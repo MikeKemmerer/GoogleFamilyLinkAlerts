@@ -95,6 +95,7 @@ async def settings_get(
 
     users = session.exec(select(User)).all() if is_admin else []
     guest_view_enabled = settings_store.get_guest_view_enabled(session) if is_admin else False
+    location_tracking_enabled = settings_store.get_location_tracking_enabled(session) if is_admin else False
     guest_perms = guest_permissions.get_guest_permissions(session) if is_admin else {}
     notification_categories = _notification_categories_for_settings(session)
 
@@ -120,6 +121,7 @@ async def settings_get(
         "is_admin": is_admin,
         "access_auth_enabled": auth_enabled,
         "access_guest_view_enabled": guest_view_enabled,
+        "location_tracking_enabled": location_tracking_enabled,
         "access_users": users,
         "access_valid_roles": ("admin", "contributor", "viewer"),
         "guest_categories": guest_permissions.FIXED_CATEGORIES,
@@ -194,6 +196,12 @@ async def toggle_theme(request: Request, session: Session = Depends(get_db)):
     new_theme = _THEME_CYCLE[(_THEME_CYCLE.index(current) + 1) % len(_THEME_CYCLE)]
     settings_store.set_theme(session, new_theme)
     return RedirectResponse(next_path, status_code=303)
+
+
+@router.post("/settings/location-tracking/toggle")
+async def toggle_location_tracking(session: Session = Depends(get_db), _admin: User | None = Depends(require_role("admin"))):
+    settings_store.set_location_tracking_enabled(session, not settings_store.get_location_tracking_enabled(session))
+    return RedirectResponse("/settings?saved=true", status_code=303)
 
 
 @router.post("/settings/children/{child_id}/toggle")

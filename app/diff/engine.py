@@ -51,6 +51,10 @@ _SCALAR_TYPES = (str, int, float, bool, type(None))
 #     changes constantly on its own (rotating signed thumbnail URLs, activity
 #     heartbeats, a static capability-flag list) and isn't a "permission"
 #     change a parent would want an alert for.
+#   - `applied_time_limits.devices.<id>.bonus_override_id` is an opaque
+#     internal override UUID. It's still stored in the raw snapshot because
+#     app/poller.py's auto-revoke bonus-time feature needs it for
+#     `cancel_time_bonus`, but it's never a human-meaningful History row.
 DEFAULT_IGNORED_PATH_PATTERNS: tuple[str, ...] = (
     r"^time_limit(\.|\[|$)",
     r"^apps_and_usage\.appUsageSessions(\[\*\]|$)",
@@ -59,6 +63,7 @@ DEFAULT_IGNORED_PATH_PATTERNS: tuple[str, ...] = (
     r"^apps_and_usage\.deviceInfo\[\*\]\.displayInfo\.thumbnail\.imageUrl$",
     r"^apps_and_usage\.deviceInfo\[\*\]\.displayInfo\.lastActivityTimeMillis$",
     r"^apps_and_usage\.deviceInfo\[\*\]\.capabilityInfo\.capabilities\[\*\]$",
+    r"^applied_time_limits\.devices\.[^.]+\.bonus_override_id$",
 )
 
 _ARRAY_INDEX_RE = re.compile(r"\[\d+\]")

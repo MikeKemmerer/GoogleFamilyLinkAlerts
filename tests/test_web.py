@@ -14,10 +14,21 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.pool import StaticPool
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.db.models import Child, ChangeEvent, LatestSnapshot, PollFailure
-from app.web import history, settings as settings_web, setup, status
+from app.web import auth, history, settings as settings_web, setup, status
 from app.web.deps import get_db
+
+_FROZEN_STATUS_NOW = datetime(2026, 7, 16, 18, 0, tzinfo=timezone.utc)
+
+
+class _FrozenStatusDatetime(datetime):
+    @classmethod
+    def now(cls, tz=None):
+        if tz is not None:
+            return _FROZEN_STATUS_NOW.astimezone(tz)
+        return _FROZEN_STATUS_NOW
 
 
 def _status_snapshot_with_location():
@@ -49,6 +60,41 @@ def _status_snapshot_with_location():
             "source_device_name": "Pixel 8",
         },
     }
+
+
+def _status_snapshot_with_app_usage(app_usage_sessions=None):
+    snapshot = _status_snapshot_with_location()
+    snapshot["apps_and_usage"]["apps"] = [
+        {"packageName": "com.google.android.youtube", "title": "YouTube"},
+        {"packageName": "com.spotify.music", "title": "Spotify Kids"},
+    ]
+    snapshot["apps_and_usage"]["appUsageSessions"] = (
+        app_usage_sessions
+        if app_usage_sessions is not None
+        else [
+            {
+                "date": {"year": 2026, "month": 7, "day": 16},
+                "usage": "3600.0s",
+                "appId": {"androidAppPackageName": "com.google.android.youtube"},
+            },
+            {
+                "date": {"year": 2026, "month": 7, "day": 16},
+                "usage": "300.0s",
+                "appId": {"androidAppPackageName": "com.google.android.youtube"},
+            },
+            {
+                "date": {"year": 2026, "month": 7, "day": 16},
+                "usage": "900.0s",
+                "appId": {"androidAppPackageName": "com.spotify.music"},
+            },
+            {
+                "date": {"year": 2026, "month": 7, "day": 15},
+                "usage": "1800.0s",
+                "appId": {"androidAppPackageName": "com.discord"},
+            },
+        ]
+    )
+    return snapshot
 
 
 class FakeAuthClient:
@@ -345,6 +391,34 @@ def test_settings_page_notifications_toggle_persists(monkeypatch, client, engine
         assert settings_store.get_notifications_enabled(s) is True
 
 
+def test_settings_location_tracking_toggle_persists(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    from app.db import settings_store
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert 'action="/settings/location-tracking/toggle"' in resp.text
+    assert "Location tracking" in resp.text
+    assert "Off by default for privacy" in resp.text
+    toggle_form = resp.text.split('action="/settings/location-tracking/toggle"', 1)[1].split("</form>", 1)[0]
+    assert "checked" not in toggle_form
+    with Session(engine) as s:
+        assert settings_store.get_location_tracking_enabled(s) is False
+
+    resp2 = client.post("/settings/location-tracking/toggle", follow_redirects=False)
+    assert resp2.status_code == 303
+    assert resp2.headers["location"] == "/settings?saved=true"
+    with Session(engine) as s:
+        assert settings_store.get_location_tracking_enabled(s) is True
+
+    resp3 = client.post("/settings/location-tracking/toggle", follow_redirects=False)
+    assert resp3.status_code == 303
+    assert resp3.headers["location"] == "/settings?saved=true"
+    with Session(engine) as s:
+        assert settings_store.get_location_tracking_enabled(s) is False
+
+
 def test_settings_page_notification_categories_persist(monkeypatch, client, engine):
     monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
 
@@ -475,6 +549,144 @@ def test_status_page_hides_location_and_battery_when_tracking_disabled(monkeypat
     assert "Device activity" in resp.text
     assert "device-location-map" not in resp.text
     assert "battery-badge" not in resp.text
+
+
+def test_build_app_usage_for_day_aggregates_sorts_and_falls_back_to_package_name():
+    usage = status._build_app_usage_for_day(
+        {
+            "apps": [
+                {"packageName": "com.google.android.youtube", "title": "YouTube"},
+            ],
+            "appUsageSessions": [
+                {
+                    "date": {"year": 2026, "month": 7, "day": 16},
+                    "usage": "120.5s",
+                    "appId": {"androidAppPackageName": "com.google.android.youtube"},
+                },
+                {
+                    "date": {"year": 2026, "month": 7, "day": 16},
+                    "usage": "59.5s",
+                    "appId": {"androidAppPackageName": "com.google.android.youtube"},
+                },
+                {
+                    "date": {"year": 2026, "month": 7, "day": 16},
+                    "usage": "90.0s",
+                    "appId": {"androidAppPackageName": "com.discord"},
+                },
+                {
+                    "date": {"year": 2026, "month": 7, "day": 15},
+                    "usage": "999.0s",
+                    "appId": {"androidAppPackageName": "com.google.android.youtube"},
+                },
+            ],
+        },
+        _FROZEN_STATUS_NOW.date(),
+    )
+
+    assert [item["package_name"] for item in usage] == [
+        "com.google.android.youtube",
+        "com.discord",
+    ]
+    assert usage[0]["app_title"] == "YouTube"
+    assert usage[0]["seconds"] == pytest.approx(180.0)
+    assert usage[0]["duration_display"] == "3m"
+    assert usage[1]["app_title"] == "com.discord"
+    assert usage[1]["seconds"] == pytest.approx(90.0)
+
+
+def test_status_page_shows_app_usage_chart_for_today(monkeypatch, client, engine):
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "App usage today" in resp.text
+    assert "YouTube" in resp.text
+    assert "Spotify Kids" in resp.text
+    assert "1h 5m" in resp.text
+    assert "15m" in resp.text
+    assert resp.text.index("YouTube") < resp.text.index("Spotify Kids")
+
+
+def test_status_page_excludes_other_calendar_days_from_app_usage(monkeypatch, client, engine):
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "com.discord" not in resp.text
+
+
+def test_guest_status_hides_app_usage_without_screen_time_permission(monkeypatch, client, engine):
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    from app.db import settings_store
+    from app.web import guest_permissions
+
+    app = FastAPI()
+    app.add_middleware(SessionMiddleware, secret_key="test-secret", session_cookie="fla_session")
+    app.include_router(status.router)
+    app.include_router(auth.router)
+
+    def override_get_db():
+        with Session(engine) as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    guest_client = TestClient(app, follow_redirects=False)
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+
+    with Session(engine) as session:
+        session.add(Child(id="c1", name="Alice", enabled=True))
+        session.add(LatestSnapshot(child_id="c1", data=_status_snapshot_with_app_usage()))
+        settings_store.mark_setup_completed(session)
+        settings_store.set_auth_enabled(session, True)
+        settings_store.set_guest_view_enabled(session, True)
+        settings_store.set_timezone(session, "UTC")
+        guest_permissions.set_guest_permissions(session, {"page:status", "child:c1"})
+
+    guest_client.get("/login/guest")
+    resp = guest_client.get("/")
+    assert resp.status_code == 200
+    assert "App usage today" not in resp.text
+    assert "YouTube" not in resp.text
+
+
+def test_status_page_skips_empty_app_usage_chart(monkeypatch, client, engine):
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage(app_usage_sessions=[])))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Device activity" in resp.text
+    assert "App usage today" not in resp.text
 
 
 def test_status_page_shows_location_map_and_battery_when_present(monkeypatch, client, engine):

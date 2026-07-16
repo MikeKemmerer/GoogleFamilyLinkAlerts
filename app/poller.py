@@ -54,6 +54,7 @@ async def _fetch_child_snapshot(
     tz,
     *,
     location_tracking_enabled: bool = False,
+    family_member_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     global _website_filter_warned
     snapshot: dict[str, Any] = {}
@@ -61,6 +62,7 @@ async def _fetch_child_snapshot(
     snapshot["apps_and_usage"] = await client.get_apps_and_usage(child_id)
     snapshot["time_limit"] = await client.get_time_limit(child_id)
     snapshot["applied_time_limits"] = await client.get_applied_time_limits(child_id, tz=tz)
+    _resolve_bonus_granted_by(snapshot, family_member_names or {})
     if location_tracking_enabled:
         snapshot["location"] = await client.get_location(child_id)
 
@@ -72,6 +74,22 @@ async def _fetch_child_snapshot(
             _website_filter_warned = True
 
     return snapshot
+
+
+def _resolve_bonus_granted_by(snapshot: dict[str, Any], family_member_names: dict[str, str]) -> None:
+    """Resolve parsed `bonus_granted_by_id` values to family display names.
+
+    Exact `userId` match only. If the parsed candidate is wrong/unknown,
+    leave `bonus_granted_by` as None so History/notifications stay silent
+    rather than showing a raw or guessed ID.
+    """
+    devices = (snapshot.get("applied_time_limits") or {}).get("devices") or {}
+    for device_info in devices.values():
+        if not isinstance(device_info, dict):
+            continue
+        candidate_id = device_info.get("bonus_granted_by_id")
+        resolved_name = family_member_names.get(candidate_id) if isinstance(candidate_id, str) else None
+        device_info["bonus_granted_by"] = resolved_name if isinstance(resolved_name, str) and resolved_name.strip() else None
 
 
 def _record_failure(session: Session, kind: str, message: str) -> PollFailure:
@@ -231,7 +249,9 @@ def _sync_app_rules(session: Session, child_id: str, snapshot: dict[str, Any]) -
     session.commit()
 
 
-async def _refresh_child_avatars(session: Session, client: FamilyLinkApiClient, children: list[Child]) -> None:
+async def _refresh_child_avatars(
+    session: Session, client: FamilyLinkApiClient, children: list[Child]
+) -> dict[str, str]:
     """Keep each child's `avatar_url` in sync with their current Google
     profile photo.
 
@@ -244,11 +264,16 @@ async def _refresh_child_avatars(session: Session, client: FamilyLinkApiClient, 
         members = await client.get_family_members()
     except (NetworkError, FamilyLinkError) as err:
         _LOGGER.warning("Failed to refresh child avatars: %s", err)
-        return
+        return {}
     avatar_by_id = {
         m["userId"]: (m.get("profile") or {}).get("profileImageUrl")
         for m in members.get("members", [])
         if m.get("userId")
+    }
+    display_name_by_id = {
+        m["userId"]: profile.get("displayName")
+        for m in members.get("members", [])
+        if m.get("userId") and isinstance((profile := (m.get("profile") or {})).get("displayName"), str)
     }
     for child in children:
         avatar_url = avatar_by_id.get(child.id)
@@ -256,6 +281,7 @@ async def _refresh_child_avatars(session: Session, client: FamilyLinkApiClient, 
             child.avatar_url = avatar_url
             session.add(child)
     session.commit()
+    return display_name_by_id
 
 
 async def _enforce_always_blocked_apps(
@@ -430,7 +456,7 @@ async def poll_once() -> None:
             await _maybe_notify_failure(session, failure)
             return
 
-        await _refresh_child_avatars(session, client, children)
+        family_member_names = await _refresh_child_avatars(session, client, children)
         tz = settings_store.get_zone_info(session)
         location_tracking_enabled = settings_store.get_location_tracking_enabled(session)
 
@@ -441,6 +467,7 @@ async def poll_once() -> None:
                     child.id,
                     tz,
                     location_tracking_enabled=location_tracking_enabled,
+                    family_member_names=family_member_names,
                 )
             except SessionExpiredError as err:
                 failure = _record_failure(session, "session_expired", str(err))

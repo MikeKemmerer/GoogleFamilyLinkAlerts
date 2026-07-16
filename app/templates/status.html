@@ -107,6 +107,30 @@
       {% if summary.location %}
         {{ render_location_panel(summary.location, summary.location.battery_level, summary.location.battery_badge_class, summary.location.source_device_name or "Latest location") }}
       {% endif %}
+      {% if summary.app_usage_today %}
+        <div class="app-usage-panel">
+          <h3 class="app-usage-title">App usage today</h3>
+          <div class="app-usage-chart" aria-label="Today's app usage breakdown for {{ summary.child.name }}">
+            {% for app in summary.app_usage_today %}
+              <div
+                class="app-usage-segment"
+                style="width: {{ "%.3f"|format(app.width_pct) }}%; background: var({{ app.color_var }});"
+                title="{{ app.app_title }} — {{ app.duration_display }}"
+                aria-label="{{ app.app_title }} — {{ app.duration_display }}"
+              ></div>
+            {% endfor %}
+          </div>
+          <ul class="app-usage-legend">
+            {% for app in summary.app_usage_today %}
+              <li class="app-usage-legend-item">
+                <span class="app-usage-swatch" style="background: var({{ app.color_var }});"></span>
+                <span>{{ app.app_title }}</span>
+                <span class="muted">{{ app.duration_display }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
     </div>
   {% endfor %}
 </div>

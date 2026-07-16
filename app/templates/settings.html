@@ -111,6 +111,19 @@
      /settings handler, which expects all these fields at once) -- the
      accordions are purely a visual/organizational grouping, not separate
      forms. -->
+<details class="accordion">
+  <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-map-pin"></use></svg>Location</summary>
+  <div class="accordion-body">
+    <form method="post" action="/settings/location-tracking/toggle" style="display:inline">
+      <label>
+        <input type="checkbox" onchange="this.form.requestSubmit()" {% if location_tracking_enabled %}checked{% endif %}>
+        Location tracking
+      </label>
+    </form>
+    <p class="hint">Records each child's last-known device location and battery level. Off by default for privacy -- turn it on only if you want this.</p>
+  </div>
+</details>
+
 <form method="post" action="/settings">
 
 <details class="accordion">
