@@ -319,6 +319,89 @@ async def _maybe_notify_enforcement(session: Session, child_name: str, rule: App
         session.commit()
 
 
+async def _enforce_auto_revoke_bonus_time(
+    session: Session, client: FamilyLinkApiClient, child: Child, snapshot: dict[str, Any]
+) -> None:
+    """Immediately cancel any active time-bonus override on this child's
+    devices if they have "auto-revoke bonus time" enabled.
+
+    Bonus time is the extra screen time a parent grants ad hoc from the
+    Family Link app (e.g. "10 more minutes today"). A parent may want that
+    treated as a one-time grant rather than a standing increase -- this
+    setting automatically revokes it again on the very next poll instead of
+    leaving it active until it naturally expires or is manually revoked in
+    the Family Link app.
+
+    IMPORTANT: like `_enforce_always_blocked_apps`, callers must diff/record
+    `snapshot` against the previous stored state *before* calling this -- it
+    mutates `snapshot` in place to reflect the revocation, so the "bonus
+    granted" transition is preserved as its own event instead of being
+    invisibly cancelled out within the same poll cycle.
+    """
+    if not child.auto_revoke_bonus_time:
+        return
+    devices = (snapshot.get("applied_time_limits") or {}).get("devices") or {}
+    if not devices:
+        return
+    device_names = device_names_from_snapshot(snapshot)
+    for device_id, device_info in devices.items():
+        override_id = device_info.get("bonus_override_id")
+        bonus_minutes = device_info.get("bonus_minutes") or 0
+        if not override_id or bonus_minutes <= 0:
+            continue
+        try:
+            await client.cancel_time_bonus(child.id, override_id)
+        except (NetworkError, FamilyLinkError) as err:
+            _LOGGER.warning("Failed to revoke bonus time for %s on device %s: %s", child.name, device_id, err)
+            continue
+        device_name = device_names.get(device_id, device_id)
+        _LOGGER.info(
+            "Revoked %d minute(s) of bonus time for %s on %s (auto-revoke rule)",
+            bonus_minutes, child.name, device_name,
+        )
+        device_info["bonus_minutes"] = 0
+        device_info["bonus_override_id"] = None
+        # Bonus replaces normal time while active (see
+        # FamilyLinkApiClient._parse_applied_time_limits) -- once revoked,
+        # total/remaining fall back to the daily-limit-minus-used
+        # calculation, matching what the next organic poll would compute.
+        if device_info.get("daily_limit_enabled"):
+            limit = device_info.get("daily_limit_minutes", 0)
+            used = device_info.get("used_minutes", 0)
+            device_info["total_allowed_minutes"] = limit
+            device_info["remaining_minutes"] = max(0, limit - used)
+        event = ChangeEvent(
+            child_id=child.id,
+            field_path=f"applied_time_limits.devices.{device_id}.bonus_minutes",
+            old_value=bonus_minutes,
+            new_value=0,
+        )
+        session.add(event)
+        session.commit()
+        session.refresh(event)
+        await _maybe_notify_bonus_revoked(session, child.name, device_name, bonus_minutes, event)
+
+
+async def _maybe_notify_bonus_revoked(
+    session: Session, child_name: str, device_name: str, bonus_minutes: int, event: ChangeEvent
+) -> None:
+    ntfy_config = settings_store.get_ntfy_config(session)
+    if not ntfy_config or not settings_store.get_notifications_enabled(session):
+        return
+    if "bonus_time" not in settings_store.get_enabled_notification_categories(session):
+        return
+    client = NtfyClient(*ntfy_config)
+    title = f"Family Link: revoked bonus time for {child_name}"
+    message = (
+        f"{device_name}: automatically revoked {bonus_minutes} minute(s) of granted "
+        f"bonus time (auto-revoke enabled for {child_name})."
+    )
+    if await client.send(title, message, priority="default", tags=["gift"]):
+        event.notified = True
+        session.add(event)
+        session.commit()
+
+
 async def poll_once() -> None:
     """Run a single poll cycle across all enabled children."""
     with get_session() as session:
@@ -371,6 +454,7 @@ async def poll_once() -> None:
                 # always-blocked rule takes effect immediately even on a
                 # brand new child/reinstall rather than waiting a cycle.
                 await _enforce_always_blocked_apps(session, client, child, new_snapshot)
+                await _enforce_auto_revoke_bonus_time(session, client, child, new_snapshot)
                 session.add(LatestSnapshot(child_id=child.id, data=new_snapshot))
                 session.commit()
                 _LOGGER.info(
@@ -410,6 +494,7 @@ async def poll_once() -> None:
             # its own recorded+notified event; it now patches `new_snapshot`
             # and records/notifies a distinct "re-blocked" event of its own.
             await _enforce_always_blocked_apps(session, client, child, new_snapshot)
+            await _enforce_auto_revoke_bonus_time(session, client, child, new_snapshot)
 
             latest.data = new_snapshot
             latest.updated_at = datetime.now(timezone.utc)

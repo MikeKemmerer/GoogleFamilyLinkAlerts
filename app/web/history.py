@@ -33,6 +33,7 @@ _PAGE_SIZE = 50
 _CATEGORY_ICONS: dict[str, str] = {
     "app_blocking": "phone-off",
     "screen_time": "clock",
+    "bonus_time": "gift",
     "bedtime_schooltime": "bed",
     "device_lock": "lock",
     "polling_issues": "ban",

@@ -133,6 +133,23 @@ async def toggle_child(child_id: str, session: Session = Depends(get_db)):
     return RedirectResponse("/settings", status_code=303)
 
 
+@router.post("/settings/children/{child_id}/toggle-auto-revoke-bonus-time")
+async def toggle_auto_revoke_bonus_time(child_id: str, session: Session = Depends(get_db)):
+    """Flip a child's `auto_revoke_bonus_time` flag.
+
+    When enabled, the poller (see
+    app/poller.py:_enforce_auto_revoke_bonus_time) will immediately cancel
+    any active granted-bonus-time override on this child's devices on the
+    very next poll, instead of leaving it active until it naturally expires.
+    """
+    child = session.get(Child, child_id)
+    if child:
+        child.auto_revoke_bonus_time = not child.auto_revoke_bonus_time
+        session.add(child)
+        session.commit()
+    return RedirectResponse("/settings", status_code=303)
+
+
 @router.post("/settings/children/{child_id}/reset-baseline")
 async def reset_baseline(child_id: str, session: Session = Depends(get_db)):
     """Delete the stored snapshot for a child so the next poll re-establishes

@@ -17,7 +17,8 @@ import re
 # to "all enabled".
 CATEGORIES: dict[str, str] = {
     "app_blocking": "App blocked / unblocked / auto re-blocked",
-    "screen_time": "Screen time & limits (daily limit, bonus time, used/remaining)",
+    "screen_time": "Screen time & limits (daily limit, used/remaining)",
+    "bonus_time": "Bonus/extra time (granted, revoked)",
     "bedtime_schooltime": "Bedtime & school time schedule",
     "device_lock": "Device lock state",
     "polling_issues": "Polling issues (login/network failures)",
@@ -32,8 +33,12 @@ _CATEGORY_PATTERNS: tuple[tuple[re.Pattern, str], ...] = (
     (re.compile(
         r"^applied_time_limits\.devices\.[^.]+\."
         r"(total_allowed_minutes|used_minutes|remaining_minutes|"
-        r"daily_limit_enabled|daily_limit_minutes|bonus_minutes|bonus_override_id)$"
+        r"daily_limit_enabled|daily_limit_minutes)$"
     ), "screen_time"),
+    (re.compile(
+        r"^applied_time_limits\.devices\.[^.]+\."
+        r"(bonus_minutes|bonus_override_id)$"
+    ), "bonus_time"),
     (re.compile(r"^applied_time_limits\.(bedtime_enabled_today|schooltime_enabled_today)$"), "bedtime_schooltime"),
     (re.compile(
         r"^applied_time_limits\.devices\.[^.]+\."

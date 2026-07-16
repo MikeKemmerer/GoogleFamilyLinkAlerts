@@ -161,6 +161,31 @@ def test_settings_reset_baseline_deletes_snapshot(client, engine):
         assert s.get(LatestSnapshot, "child1") is None
 
 
+def test_settings_toggle_auto_revoke_bonus_time(monkeypatch, client, engine):
+    monkeypatch.setattr(settings_web, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.commit()
+
+    resp = client.get("/settings")
+    assert resp.status_code == 200
+    assert "Auto-revoke bonus time" in resp.text
+
+    resp2 = client.post("/settings/children/child1/toggle-auto-revoke-bonus-time")
+    assert resp2.status_code == 303
+
+    with Session(engine) as s:
+        child = s.get(Child, "child1")
+        assert child.auto_revoke_bonus_time is True
+
+    resp3 = client.post("/settings/children/child1/toggle-auto-revoke-bonus-time")
+    assert resp3.status_code == 303
+
+    with Session(engine) as s:
+        child = s.get(Child, "child1")
+        assert child.auto_revoke_bonus_time is False
+
+
 def test_settings_page_lists_blocked_apps_and_toggle_always_blocked(monkeypatch, client, engine):
     from app.db.models import AppRule
 

@@ -11,14 +11,17 @@ class FakeApiClient:
     """Stands in for FamilyLinkApiClient in poller tests."""
 
     def __init__(self, apps_and_usage=None, time_limit=None, applied_time_limits=None,
-                 raise_on_authenticate=None, raise_on_fetch=None, raise_on_block=None):
+                 raise_on_authenticate=None, raise_on_fetch=None, raise_on_block=None,
+                 raise_on_cancel_bonus=None):
         self._apps_and_usage = apps_and_usage or {"apps": []}
         self._time_limit = time_limit or {}
         self._applied_time_limits = applied_time_limits or {}
         self._raise_on_authenticate = raise_on_authenticate
         self._raise_on_fetch = raise_on_fetch
         self._raise_on_block = raise_on_block
+        self._raise_on_cancel_bonus = raise_on_cancel_bonus
         self.blocked: list[tuple[str, str]] = []
+        self.cancelled_bonuses: list[tuple[str, str]] = []
 
     async def authenticate(self):
         if self._raise_on_authenticate:
@@ -39,6 +42,11 @@ class FakeApiClient:
         if self._raise_on_block:
             raise self._raise_on_block
         self.blocked.append((child_id, package_name))
+
+    async def cancel_time_bonus(self, account_id, override_id):
+        if self._raise_on_cancel_bonus:
+            raise self._raise_on_cancel_bonus
+        self.cancelled_bonuses.append((account_id, override_id))
 
     async def get_family_members(self):
         # Avatar refresh is a best-effort, once-per-cycle side effect;
@@ -430,6 +438,88 @@ async def test_poll_once_logs_but_continues_when_reblock_fails(monkeypatch, db_s
         ]
     }
     fake = FakeApiClient(apps_and_usage=apps_and_usage, raise_on_block=NetworkError("boom"))
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    # Should not raise -- enforcement failures are logged, not fatal.
+    await poller.poll_once()
+
+
+async def test_poll_once_revokes_bonus_time_when_auto_revoke_enabled(monkeypatch, db_session):
+    from sqlmodel import select
+    from app.db.models import ChangeEvent, LatestSnapshot
+
+    with Session(db_session) as s:
+        child = s.get(Child, "child1")
+        child.auto_revoke_bonus_time = True
+        s.add(child)
+        s.commit()
+
+    applied_time_limits = {
+        "devices": {
+            "dev1": {
+                "bonus_minutes": 10,
+                "bonus_override_id": "override1",
+                "daily_limit_enabled": True,
+                "daily_limit_minutes": 60,
+                "used_minutes": 20,
+            },
+        },
+    }
+    fake = FakeApiClient(applied_time_limits=applied_time_limits)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    assert fake.cancelled_bonuses == [("child1", "override1")]
+
+    with Session(db_session) as s:
+        latest = s.get(LatestSnapshot, "child1")
+        device = latest.data["applied_time_limits"]["devices"]["dev1"]
+        assert device["bonus_minutes"] == 0
+        assert device["bonus_override_id"] is None
+        # Bonus replaces normal time while active -- once revoked, remaining
+        # falls back to daily-limit-minus-used, same as the read path.
+        assert device["total_allowed_minutes"] == 60
+        assert device["remaining_minutes"] == 40
+
+        events = s.exec(select(ChangeEvent).where(
+            ChangeEvent.field_path == "applied_time_limits.devices.dev1.bonus_minutes"
+        )).all()
+        assert len(events) == 1
+        assert events[0].old_value == 10
+        assert events[0].new_value == 0
+
+
+async def test_poll_once_does_not_revoke_bonus_time_when_disabled(monkeypatch, db_session):
+    # child1's auto_revoke_bonus_time defaults to False in the fixture.
+    applied_time_limits = {
+        "devices": {
+            "dev1": {"bonus_minutes": 10, "bonus_override_id": "override1"},
+        },
+    }
+    fake = FakeApiClient(applied_time_limits=applied_time_limits)
+    monkeypatch.setattr(poller, "build_api_client", lambda: fake)
+
+    await poller.poll_once()
+
+    assert fake.cancelled_bonuses == []
+
+
+async def test_poll_once_logs_but_continues_when_cancel_bonus_fails(monkeypatch, db_session):
+    from app.familylink.exceptions import NetworkError
+
+    with Session(db_session) as s:
+        child = s.get(Child, "child1")
+        child.auto_revoke_bonus_time = True
+        s.add(child)
+        s.commit()
+
+    applied_time_limits = {
+        "devices": {
+            "dev1": {"bonus_minutes": 10, "bonus_override_id": "override1"},
+        },
+    }
+    fake = FakeApiClient(applied_time_limits=applied_time_limits, raise_on_cancel_bonus=NetworkError("boom"))
     monkeypatch.setattr(poller, "build_api_client", lambda: fake)
 
     # Should not raise -- enforcement failures are logged, not fatal.

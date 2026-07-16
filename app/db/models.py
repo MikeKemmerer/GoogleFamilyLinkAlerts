@@ -28,6 +28,10 @@ class Child(SQLModel, table=True):
     name: str
     avatar_url: str | None = Field(default=None, description="Google profile photo URL (from families/mine/members)")
     enabled: bool = Field(default=True, description="Whether polling is active for this child")
+    auto_revoke_bonus_time: bool = Field(
+        default=False,
+        description="If true, the poller automatically cancels any active time-bonus override for this child's devices on the next poll (see app/poller.py's _enforce_auto_revoke_bonus_time)",
+    )
     created_at: datetime = Field(default_factory=_utcnow)
 
 

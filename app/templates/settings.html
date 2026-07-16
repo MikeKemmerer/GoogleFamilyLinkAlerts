@@ -30,12 +30,19 @@
   <summary><svg class="icon icon-lg"><use href="/static/icons.svg#icon-users"></use></svg>Children</summary>
   <div class="accordion-body">
     <table class="stack-mobile">
-      <thead><tr><th>Name</th><th>Monitoring</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Monitoring</th><th>Auto-revoke bonus time</th><th></th></tr></thead>
       <tbody>
       {% for c in children %}
         <tr>
           <td data-label="Name">{% if c.avatar_url %}<img class="avatar-sm" src="{{ c.avatar_url }}" alt="">{% endif %}{{ c.name }}</td>
           <td data-label="Monitoring">{% if c.enabled %}<span class="badge badge-ok">enabled</span>{% else %}<span class="badge badge-bad">disabled</span>{% endif %}</td>
+          <td data-label="Auto-revoke bonus time">
+            <form method="post" action="/settings/children/{{ c.id }}/toggle-auto-revoke-bonus-time" style="display:inline">
+              <label>
+                <input type="checkbox" onchange="this.form.requestSubmit()" {% if c.auto_revoke_bonus_time %}checked{% endif %}>
+              </label>
+            </form>
+          </td>
           <td>
             <form method="post" action="/settings/children/{{ c.id }}/toggle" style="display:inline">
               <button type="submit">{{ "Disable" if c.enabled else "Enable" }}</button>
@@ -50,7 +57,9 @@
       </tbody>
     </table>
     <p class="hint">"Reset baseline" clears the stored snapshot for a child so the next poll starts fresh
-       without generating change alerts -- handy after a big batch of manual changes you don't want notified about.</p>
+       without generating change alerts -- handy after a big batch of manual changes you don't want notified about.
+       "Auto-revoke bonus time" automatically cancels any granted extra screen time on the next poll, so bonus
+       time stays a one-off treat instead of a standing increase.</p>
   </div>
 </details>
 

@@ -12,11 +12,13 @@ def test_category_for_field_path_app_blocking():
 
 
 def test_category_for_field_path_screen_time():
-    for suffix in (
-        "total_allowed_minutes", "used_minutes", "remaining_minutes",
-        "daily_limit_enabled", "daily_limit_minutes", "bonus_minutes", "bonus_override_id",
-    ):
+    for suffix in ("total_allowed_minutes", "used_minutes", "remaining_minutes", "daily_limit_enabled", "daily_limit_minutes"):
         assert category_for_field_path(f"applied_time_limits.devices.dev1.{suffix}") == "screen_time"
+
+
+def test_category_for_field_path_bonus_time():
+    for suffix in ("bonus_minutes", "bonus_override_id"):
+        assert category_for_field_path(f"applied_time_limits.devices.dev1.{suffix}") == "bonus_time"
 
 
 def test_category_for_field_path_bedtime_schooltime():

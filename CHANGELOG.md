@@ -4,6 +4,23 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- Settings > Children: added an "Auto-revoke bonus time" checkbox per
+  child. When enabled, the poller automatically cancels (revokes) any
+  active granted bonus/extra screen time on that child's devices on the
+  very next polling interval, so a one-off bonus grant doesn't silently
+  become a standing increase to the daily limit. Uses a new
+  `cancel_time_bonus` write against Family Link's API (the same
+  DELETE-via-POST convention Google's own client uses), the project's
+  second sanctioned write capability after "always-blocked apps"
+  re-blocking.
+- Notification settings: split the "Screen time & limits" category into
+  two separate categories -- "Screen time & limits" (daily limit,
+  used/remaining) and a new "Bonus/extra time" category (bonus granted,
+  bonus revoked) -- so you can enable/disable notifications for each
+  independently. **If you've already customized your notification
+  categories**, you'll need to revisit Settings > Notifications and check
+  the new "Bonus/extra time" box if you still want alerts about granted or
+  auto-revoked bonus time; brand-new installs get both enabled by default.
 - Added a favicon (self-hosted SVG, reuses the shield logo) so the browser
   tab/bookmark icon isn't the generic blank-page icon.
 - History page: the Detected changes table is now paginated (50 per page,

@@ -6,10 +6,12 @@ reverse-engineered these endpoints for a Home Assistant integration that
 both reads *and* controls Family Link. This project only needs to *read*
 settings in order to detect and alert on changes, so most control/mutation
 endpoints (set bedtime, add time bonus, lock device, etc.) are intentionally
-out of scope. The one exception is `block_app`/`unblock_app`, used narrowly
-by the "always blocked" app-enforcement feature (see app/poller.py) so a
-parent can opt specific apps into "if this ever gets re-enabled, block it
-again immediately" -- everything else remains read-only.
+out of scope. The exceptions are `block_app`/`unblock_app`, used narrowly by
+the "always blocked" app-enforcement feature (see app/poller.py) so a parent
+can opt specific apps into "if this ever gets re-enabled, block it again
+immediately", and `cancel_time_bonus`, used by the "auto-revoke bonus time"
+child setting so a granted bonus gets revoked again on the next poll --
+everything else remains read-only.
 
 The `appliedTimeLimits` response is an undocumented, deeply nested
 positional array (not a named JSON object), reverse-engineered by inspecting
@@ -288,6 +290,38 @@ class FamilyLinkApiClient:
         payload = [account_id, [[[package_name], []]]]
         await self._post(self._people_url(account_id, "apps:updateRestrictions"), payload)
 
+    async def cancel_time_bonus(self, account_id: str, override_id: str) -> None:
+        """Cancel/revoke an active time-bonus override (extra screen time a
+        parent granted via the Family Link app), used by the "auto-revoke
+        bonus time" child setting (see app/poller.py).
+
+        Ported from noiwid/HAFamilyLink's `async_cancel_time_bonus` (MIT
+        licensed -- see third_party/NOTICE.md). Google uses a DELETE-via-POST
+        convention here (`?$httpMethod=DELETE` query param on a POST, no
+        real HTTP DELETE verb and no request body) rather than the
+        `apps:updateRestrictions`/`timeLimitOverrides:batchCreate` POST body
+        shape used by `block_app`/`unblock_app` above.
+        """
+        self._validate_id(account_id, "account_id")
+        self._validate_id(override_id, "override_id")
+        if not self.is_authenticated():
+            raise AuthenticationError("Not authenticated")
+        url = f"{self._people_url(account_id, f'timeLimitOverride/{override_id}')}?$httpMethod=DELETE"
+        headers = {
+            **self._auth_headers(),
+            "Content-Type": "application/json+protobuf",
+            "Cookie": self._get_cookie_header(),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, headers=headers)
+        except httpx.HTTPError as err:
+            raise NetworkError(f"Request to {url} failed: {err}") from err
+        if resp.status_code == 401:
+            raise SessionExpiredError("Session expired, please re-authenticate")
+        if resp.status_code != 200:
+            raise NetworkError(f"POST {url} returned HTTP {resp.status_code}: {resp.text[:500]}")
+
     async def get_time_limit(self, account_id: str) -> dict[str, Any]:
         """Bedtime/school-time rule configuration (schedules, enabled flags)."""
         params = [
@@ -370,15 +404,19 @@ class FamilyLinkApiClient:
                 "bedtime_active": False,
                 "schooltime_active": False,
                 "bonus_minutes": 0,
+                "bonus_override_id": None,
             }
 
-            # Bonus override lives in device_data[0] when type == 10.
+            # Bonus override lives in device_data[0] when type == 10. Its
+            # override_id (device_data[0][0]) is needed to later cancel/
+            # revoke the bonus via `cancel_time_bonus` (auto-revoke feature).
             override = device_data[0]
             if override and isinstance(override, list) and len(override) > 13 and override[2] == 10:
                 try:
                     bonus_seconds_str = override[13][0][0]
                     if isinstance(bonus_seconds_str, str) and bonus_seconds_str.isdigit():
                         device_info["bonus_minutes"] = int(bonus_seconds_str) // 60
+                        device_info["bonus_override_id"] = override[0]
                 except (IndexError, TypeError):
                     pass
 
