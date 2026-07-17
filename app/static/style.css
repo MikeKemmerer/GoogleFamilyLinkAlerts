@@ -249,12 +249,25 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
 .app-usage-hourly-details summary {
   cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--accent);
 }
-.app-usage-hourly-chart { margin-top: 0.6rem; }
+.app-usage-hourly-body { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.app-usage-hourly-yaxis {
+  display: flex; flex-direction: column; justify-content: space-between;
+  flex: 0 0 auto; width: 3.4rem; height: 200px; box-sizing: border-box;
+  text-align: right; padding-right: 0.4rem;
+}
+.app-usage-hourly-yaxis span { font-size: 0.72rem; line-height: 1; white-space: nowrap; }
+.app-usage-hourly-chart { flex: 1 1 auto; min-width: 0; margin-top: 0; }
 .app-usage-hourly-chart svg { width: 100%; height: 200px; display: block; }
 .app-usage-hourly-axis { display: flex; justify-content: space-between; margin-top: 0.2rem; }
 .leaflet-container {
   color: var(--text); font: inherit; background: var(--surface);
 }
+.leaflet-recenter-control a {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; background: var(--surface); color: var(--text);
+}
+.leaflet-recenter-control a:hover { background: var(--surface-alt); color: var(--accent); }
+.leaflet-recenter-control .icon { width: 0.95em; height: 0.95em; }
 .field-path {
   color: var(--text-muted); font-size: 0.75rem; font-family: "JetBrains Mono", Consolas, monospace;
   margin-top: 0.15rem; overflow-wrap: anywhere; word-break: break-word;

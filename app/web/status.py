@@ -181,11 +181,29 @@ def _build_hourly_app_usage_chart(
         hour_labels.append(max_hour)
     hour_labels = [f"{h:02d}:00" if h != max_hour else "now" for h in hour_labels]
 
+    # Y-axis ticks (0, 25%, 50%, 75%, 100% of max_cumulative), top-to-bottom
+    # so the highest value lines up with the top of the chart. Labels live
+    # in a separate HTML flex column next to the SVG (laid out with
+    # `justify-content: space-between` so the top/bottom ticks always stay
+    # fully inside their container) rather than as SVG <text> -- the chart
+    # uses preserveAspectRatio="none", which would stretch/skew any text
+    # placed directly inside it.
+    tick_count = 5
+    y_ticks = []
+    for i in range(tick_count):
+        frac = i / (tick_count - 1)
+        value_minutes = max_cumulative * (1 - frac)
+        y_ticks.append({
+            "y": frac * chart_height,
+            "label": format_usage_duration(value_minutes * 60),
+        })
+
     return {
         "series": series,
         "chart_width": chart_width,
         "chart_height": chart_height,
         "hour_labels": hour_labels,
+        "y_ticks": y_ticks,
         "max_display": format_usage_duration(max_cumulative * 60),
     }
 

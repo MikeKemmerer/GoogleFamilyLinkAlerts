@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Added a y-axis to the "Usage over the day" chart** (Status page):
+  cumulative-time tick labels (0/25/50/75/100% of the day's max) plus
+  matching dashed gridlines, laid out so the top and bottom labels are
+  never clipped.
+- **Added a re-center control to the device-location maps** (Status and
+  History pages) -- a small button (top-left, matching Leaflet's usual
+  zoom-control styling) that resets the view if you've panned/zoomed away.
+  On the History page it re-fits the whole route; on the Status page it
+  re-centers on the device's last known point.
 - **Fixed the "Usage over the day" chart plotting flat, misleading data
   into hours of the day that haven't happened yet**, and switched it from
   linear interpolation between sparse hourly points to a proper step

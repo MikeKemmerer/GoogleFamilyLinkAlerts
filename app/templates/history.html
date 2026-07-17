@@ -177,6 +177,7 @@
 {% block extra_scripts %}
   {% if history_mode == "location" and location_history.fixes %}
   <script src="/static/leaflet/leaflet.js"></script>
+  <script src="/static/map-controls.js"></script>
   <script>
     (function () {
       function initMap() {
@@ -197,10 +198,19 @@
       L.tileLayer("/tiles/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
       if (coords.length > 1) {
         L.polyline(coords, { color: "#e2762f", weight: 3, opacity: 0.75 }).addTo(map);
-        map.fitBounds(coords, { padding: [20, 20] });
-      } else {
-        map.setView(coords[0], 13);
       }
+      // recenter() resets the view to the whole route -- used both on
+      // first load and whenever the re-center control is clicked (e.g.
+      // after panning/zooming away while scrubbing the slider).
+      function recenter() {
+        if (coords.length > 1) {
+          map.fitBounds(coords, { padding: [20, 20] });
+        } else {
+          map.setView(coords[0], 13);
+        }
+      }
+      recenter();
+      addRecenterControl(map, recenter);
       // Guards against the map being initialized while its container had a
       // stale/zero layout size -- without this, tiles can render blank/grey
       // until the window is manually resized.

@@ -132,14 +132,24 @@
           {% if summary.app_usage_hourly %}
             <details class="app-usage-hourly-details">
               <summary>Usage over the day</summary>
-              <div class="app-usage-hourly-chart">
-                <svg viewBox="0 0 {{ summary.app_usage_hourly.chart_width }} {{ summary.app_usage_hourly.chart_height }}" preserveAspectRatio="none" role="img" aria-label="Cumulative app usage by hour of day for {{ summary.child.name }}">
-                  {% for layer in summary.app_usage_hourly.series %}
-                    <path d="{{ layer.path }}" fill="var({{ layer.color_var }})" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"><title>{{ layer.app_title }} — {{ layer.total_display }}</title></path>
+              <div class="app-usage-hourly-body">
+                <div class="app-usage-hourly-yaxis">
+                  {% for tick in summary.app_usage_hourly.y_ticks %}
+                    <span class="hint">{{ tick.label }}</span>
                   {% endfor %}
-                </svg>
-                <div class="app-usage-hourly-axis hint">
-                  {% for label in summary.app_usage_hourly.hour_labels %}<span>{{ label }}</span>{% endfor %}
+                </div>
+                <div class="app-usage-hourly-chart">
+                  <svg viewBox="0 0 {{ summary.app_usage_hourly.chart_width }} {{ summary.app_usage_hourly.chart_height }}" preserveAspectRatio="none" role="img" aria-label="Cumulative app usage by hour of day for {{ summary.child.name }}">
+                    {% for tick in summary.app_usage_hourly.y_ticks %}
+                      <line x1="0" y1="{{ tick.y }}" x2="{{ summary.app_usage_hourly.chart_width }}" y2="{{ tick.y }}" stroke="var(--border)" stroke-width="1" stroke-dasharray="4 4"></line>
+                    {% endfor %}
+                    {% for layer in summary.app_usage_hourly.series %}
+                      <path d="{{ layer.path }}" fill="var({{ layer.color_var }})" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1"><title>{{ layer.app_title }} — {{ layer.total_display }}</title></path>
+                    {% endfor %}
+                  </svg>
+                  <div class="app-usage-hourly-axis hint">
+                    {% for label in summary.app_usage_hourly.hour_labels %}<span>{{ label }}</span>{% endfor %}
+                  </div>
                 </div>
               </div>
               <p class="hint">Cumulative time used through the day (0–{{ summary.app_usage_hourly.max_display }}). Built from usage observed since this feature was enabled -- resolution is limited to the polling interval, and there's no historical data from before it shipped.</p>
@@ -159,6 +169,7 @@
 {% endblock %}
 {% block extra_scripts %}
   <script src="/static/leaflet/leaflet.js"></script>
+  <script src="/static/map-controls.js"></script>
   <script>
     (function () {
       function initMaps() {
@@ -179,23 +190,33 @@
             var map = L.map(el, { attributionControl: false, zoomControl: false });
             L.tileLayer("/tiles/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
             var point = [lat, lng];
-            // Establish an initial view before adding any layer whose
-            // bounds Leaflet needs to project (e.g. the accuracy circle
-            // below) -- circle.getBounds() requires the map to already
-            // have an active view/zoom, otherwise it throws because the
-            // circle was never fully attached (this._map stays undefined).
-            map.setView(point, 13);
-            L.marker(point).addTo(map);
+            var circle = null;
             if (Number.isFinite(accuracy) && accuracy > 0) {
-              var circle = L.circle(point, {
+              circle = L.circle(point, {
                 radius: accuracy,
                 color: "#e2762f",
                 fillColor: "#e2762f",
                 fillOpacity: 0.15,
                 weight: 1
-              }).addTo(map);
-              map.fitBounds(circle.getBounds(), { padding: [16, 16] });
+              });
             }
+            // recenter() re-establishes the initial view -- used both on
+            // first load and whenever the re-center control is clicked
+            // (e.g. after the visitor has panned/zoomed away).
+            function recenter() {
+              // Establish a view before fitting bounds -- circle.getBounds()
+              // requires the map to already have an active view/zoom,
+              // otherwise it throws because the circle was never fully
+              // attached (this._map stays undefined).
+              map.setView(point, 13);
+              if (circle) {
+                map.fitBounds(circle.getBounds(), { padding: [16, 16] });
+              }
+            }
+            recenter();
+            L.marker(point).addTo(map);
+            if (circle) circle.addTo(map);
+            addRecenterControl(map, recenter);
             el.dataset.initialized = "true";
             // Guards against maps initialized while their container had a
             // stale/zero layout size (e.g. inside a <details> that was still

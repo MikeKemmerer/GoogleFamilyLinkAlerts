@@ -733,6 +733,33 @@ def test_status_page_hourly_chart_ignores_buckets_after_current_hour(monkeypatch
     assert "(0–15m)" not in resp.text
 
 
+def test_status_page_shows_hourly_chart_yaxis_and_gridlines(monkeypatch, client, engine):
+    from app.db.models import AppUsageHourlyBucket
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=9, seconds=600.0,
+        ))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "app-usage-hourly-yaxis" in resp.text
+    # 5 dashed gridlines drawn behind the stacked areas, matching the 5
+    # y-axis tick labels (0%, 25%, 50%, 75%, 100% of the max).
+    assert resp.text.count('stroke-dasharray="4 4"') == 5
+
+
 def test_status_page_skips_empty_app_usage_chart(monkeypatch, client, engine):
     monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
     monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
