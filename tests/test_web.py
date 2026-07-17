@@ -699,6 +699,40 @@ def test_status_page_shows_hourly_usage_chart_when_buckets_recorded(monkeypatch,
     assert "app-usage-hourly-chart" in resp.text
 
 
+def test_status_page_hourly_chart_ignores_buckets_after_current_hour(monkeypatch, client, engine):
+    """Buckets recorded for hours later than "now" (e.g. leftover data from
+    a timezone change, or clock skew) shouldn't get plotted -- the x-axis
+    should only ever extend through the current hour."""
+    from app.db.models import AppUsageHourlyBucket
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=9, seconds=600.0,
+        ))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=22, seconds=300.0,
+        ))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    # _FROZEN_STATUS_NOW is hour 18 -- the hour-22 bucket must not push the
+    # displayed max/total above what's accounted for through "now".
+    assert "(0–10m)" in resp.text
+    assert "(0–15m)" not in resp.text
+
+
 def test_status_page_skips_empty_app_usage_chart(monkeypatch, client, engine):
     monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
     monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)

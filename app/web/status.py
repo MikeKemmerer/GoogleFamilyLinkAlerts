@@ -81,12 +81,16 @@ def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date:
 
 
 def _build_hourly_app_usage_chart(
-    session: Session, child_id: str, target_date: date, app_titles: dict[str, str]
+    session: Session, child_id: str, target_date: date, app_titles: dict[str, str], current_hour: int
 ) -> dict[str, Any] | None:
     """Build a stacked-area "usage over the day" chart from the hourly
     buckets the poller accumulates (see AppUsageHourlyBucket). Returns None
     if there's nothing recorded yet for this child/day -- e.g. the feature
     was only just enabled, so no deltas have been observed yet.
+
+    Only elapsed hours (0..current_hour, inclusive) are plotted -- the
+    chart's x-axis ends at "now" rather than projecting a flat line across
+    hours of the day that haven't happened yet.
     """
     rows = session.exec(
         select(AppUsageHourlyBucket).where(
@@ -113,13 +117,16 @@ def _build_hourly_app_usage_chart(
         key=lambda pkg: (-totals_by_app[pkg], app_titles.get(pkg, pkg).casefold(), pkg),
     )
 
+    max_hour = max(0, min(current_hour, 23))
+    domain_hours = max_hour + 1  # x-axis spans [0, domain_hours) -- i.e. through "now"
+
     max_cumulative = 0.0
     series = []
     for package_name in ordered_packages:
         hourly = seconds_by_app_hour.get(package_name, {})
         cumulative_minutes = []
         running_total = 0.0
-        for hour in range(24):
+        for hour in range(domain_hours):
             running_total += hourly.get(hour, 0.0)
             cumulative_minutes.append(running_total / 60.0)
         max_cumulative = max(max_cumulative, cumulative_minutes[-1])
@@ -138,27 +145,42 @@ def _build_hourly_app_usage_chart(
 
     # Build an SVG stacked-area chart by hand (no charting library, matching
     # the project's no-CDN/no-JS-framework convention) -- one <path> per
-    # app, each drawn as the band between its own cumulative-total polyline
-    # and the previous app's, so the bands stack visually.
+    # app, each drawn as a step function (flat within each hour bucket,
+    # vertical jump at hour boundaries) since the underlying data is only
+    # ever known at hourly resolution. A step shape reads far more clearly
+    # here than linear interpolation, which draws misleading diagonal
+    # "ramps" across mostly-flat hours.
     chart_width, chart_height = 720, 220
-    def x_for_hour(hour: int) -> float:
-        return (hour / 23) * chart_width
+
+    def x_for_hour(hour: float) -> float:
+        return (hour / domain_hours) * chart_width
 
     def y_for_minutes(minutes: float) -> float:
         return chart_height - (minutes / max_cumulative) * chart_height
 
-    running_top = [0.0] * 24
+    def step_points(values: list[float]) -> list[tuple[float, float]]:
+        points: list[tuple[float, float]] = []
+        for hour, value in enumerate(values):
+            points.append((hour, value))
+            points.append((hour + 1, value))
+        return points
+
+    running_top = [0.0] * domain_hours
     for layer in series:
         bottom = list(running_top)
-        top = [bottom[h] + layer["cumulative_minutes"][h] for h in range(24)]
-        top_points = " ".join(f"{x_for_hour(h):.1f},{y_for_minutes(top[h]):.1f}" for h in range(24))
-        bottom_points = " ".join(
-            f"{x_for_hour(h):.1f},{y_for_minutes(bottom[h]):.1f}" for h in range(23, -1, -1)
-        )
-        layer["path"] = f"M {top_points} L {bottom_points} Z"
+        top = [bottom[h] + layer["cumulative_minutes"][h] for h in range(domain_hours)]
+        top_step = step_points(top)
+        bottom_step = step_points(bottom)
+        top_svg = " ".join(f"{x_for_hour(x):.1f},{y_for_minutes(y):.1f}" for x, y in top_step)
+        bottom_svg = " ".join(f"{x_for_hour(x):.1f},{y_for_minutes(y):.1f}" for x, y in reversed(bottom_step))
+        layer["path"] = f"M {top_svg} L {bottom_svg} Z"
         running_top = top
 
-    hour_labels = [f"{h:02d}:00" for h in (0, 6, 12, 18, 23)]
+    hour_labels = [h for h in (0, 6, 12, 18) if h < domain_hours]
+    if not hour_labels or hour_labels[-1] != max_hour:
+        hour_labels.append(max_hour)
+    hour_labels = [f"{h:02d}:00" if h != max_hour else "now" for h in hour_labels]
+
     return {
         "series": series,
         "chart_width": chart_width,
@@ -251,7 +273,8 @@ def _build_device_summaries(
     show_location = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:location")
     show_battery = guest_perms is None or guest_permissions.guest_can(guest_perms, "data:battery")
     location_tracking_enabled = settings_store.get_location_tracking_enabled(session)
-    local_today = datetime.now(tz).date()
+    local_now = datetime.now(tz)
+    local_today = local_now.date()
 
     summaries = []
     for child in children:
@@ -338,7 +361,11 @@ def _build_device_summaries(
             ),
             "app_usage_hourly": (
                 _build_hourly_app_usage_chart(
-                    session, child.id, local_today, app_titles_from_snapshot({"apps_and_usage": apps_and_usage})
+                    session,
+                    child.id,
+                    local_today,
+                    app_titles_from_snapshot({"apps_and_usage": apps_and_usage}),
+                    local_now.hour,
                 )
                 if show_screen_time else None
             ),

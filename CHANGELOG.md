@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Fixed the "Usage over the day" chart plotting flat, misleading data
+  into hours of the day that haven't happened yet**, and switched it from
+  linear interpolation between sparse hourly points to a proper step
+  chart (flat within each hour, vertical jump at hour boundaries) -- this
+  matches the actual hourly resolution of the underlying data instead of
+  implying gradual/continuous usage between polls. The x-axis now always
+  ends at "now" instead of projecting all the way to 23:00.
+- **Increased the device-location map height** (190px -> 320px on both the
+  Status and History pages) -- it was rendering noticeably squashed for
+  its width.
 - **Fixed device-location maps on the Status page never rendering at all
   when accuracy data was present.** The accuracy-circle overlay's
   `getBounds()` was being called before the map had an initial view/zoom

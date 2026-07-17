@@ -221,7 +221,7 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
 }
 .device-location-meta, .device-location-text { margin-top: 0.45rem; }
 .device-location-map {
-  height: 190px; border: 1px solid var(--border); border-radius: 8px;
+  height: 320px; border: 1px solid var(--border); border-radius: 8px;
   background: var(--surface);
 }
 .app-usage-panel {
@@ -250,7 +250,7 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
   cursor: pointer; font-weight: 600; font-size: 0.9rem; color: var(--accent);
 }
 .app-usage-hourly-chart { margin-top: 0.6rem; }
-.app-usage-hourly-chart svg { width: 100%; height: 160px; display: block; }
+.app-usage-hourly-chart svg { width: 100%; height: 200px; display: block; }
 .app-usage-hourly-axis { display: flex; justify-content: space-between; margin-top: 0.2rem; }
 .leaflet-container {
   color: var(--text); font: inherit; background: var(--surface);
