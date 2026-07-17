@@ -6,8 +6,8 @@ import re
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlmodel import Session, func, select
+from fastapi import APIRouter, Depends, Request
+from sqlmodel import Session, select
 
 from ..db import settings_store
 from ..db.models import AppRule, Child, ChangeEvent, LatestSnapshot, PollFailure
@@ -24,10 +24,10 @@ from .deps import get_db, get_effective_zone_info, last_poll_times, render, requ
 
 router = APIRouter()
 
-# Detected-changes list page size. Kept fairly generous since each row is a
-# single line (collapsed) -- most reading happens on page 1 anyway, this
-# just keeps very long histories from turning into one giant table.
+# Detected-changes list page size. Configurable via the page_size query
+# param (see _PAGE_SIZE_OPTIONS below) -- this is just the default.
 _PAGE_SIZE = 50
+_PAGE_SIZE_OPTIONS = (25, 50, 100)
 
 # Maps each notification category (app.notify.categories.CATEGORIES) to a
 # self-hosted Lucide icon id (see app/static/icons.svg) shown next to each
@@ -211,19 +211,18 @@ async def history(
     child_id: str = "",
     category: str = "",
     page: int = 1,
-    view: str = "",
+    page_size: int = _PAGE_SIZE,
+    location_child_id: str = "",
     access=Depends(require_page_access("viewer", "page:history")),
 ):
     page = max(page, 1)
+    page_size = page_size if page_size in _PAGE_SIZE_OPTIONS else _PAGE_SIZE
     selected_category = category if category in _CHANGE_CATEGORY_KEYS else ""
-    history_mode = "location" if view == "location" else "list"
 
     _user, is_guest = access
     guest_perms = guest_permissions.get_guest_permissions(session) if is_guest else None
     if guest_perms is not None:
         allowed_child_ids = guest_permissions.guest_allowed_child_ids(session, guest_perms)
-        if child_id and child_id not in allowed_child_ids and history_mode == "location":
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
         # A guest explicitly filtering to a child they're not allowed to see
         # (e.g. a hand-edited URL) falls back to "no filter" rather than
         # leaking that the child exists via an empty-but-distinct result.
@@ -231,10 +230,12 @@ async def history(
             child_id = ""
         show_actor = guest_permissions.guest_can(guest_perms, "history:show_actor")
         full_pagination = guest_permissions.guest_can(guest_perms, "history:full_pagination")
+        can_view_location = guest_permissions.guest_can(guest_perms, "data:location")
     else:
         allowed_child_ids = None
         show_actor = True
         full_pagination = True
+        can_view_location = True
 
     children = session.exec(select(Child)).all()
     if allowed_child_ids is not None:
@@ -242,13 +243,6 @@ async def history(
     child_names = {c.id: c.name for c in children}
     child_avatars = {c.id: c.avatar_url for c in children}
     tz = get_effective_zone_info(request, session)
-    if history_mode == "location":
-        if not child_id:
-            history_mode = "list"
-        elif guest_perms is not None and not guest_permissions.guest_can(guest_perms, "data:location"):
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        elif child_id not in child_names:
-            raise HTTPException(status_code=404, detail="Child not found")
 
     # Device IDs are opaque strings (e.g. "aannnppa...") -- resolve them to
     # the friendly names Family Link shows (e.g. "Chromebook") using each
@@ -275,47 +269,46 @@ async def history(
         icons.update(app_icons_from_snapshot(snapshot.data if snapshot else None))
         app_icons_by_child[child.id] = icons
 
-    location_history_href = None
-    can_view_location_history = child_id in child_names and (
-        guest_perms is None or guest_permissions.guest_can(guest_perms, "data:location")
-    )
-    if can_view_location_history:
-        location_count_query = (
-            select(func.count())
-            .select_from(ChangeEvent)
-            .where(ChangeEvent.child_id == child_id)
-            .where(ChangeEvent.field_path.like("location.%"))
-        )
-        if session.exec(location_count_query).one():
-            location_history_href = f"/history?child_id={child_id}&view=location"
-
-    if history_mode == "location":
+    # The location-history map is its own self-contained card with its own
+    # child selector (independent of the "Filter by child" control above,
+    # which only affects the detected-changes table) -- so a parent can
+    # browse one child's change log while replaying a different child's
+    # location trail. Resolve which child to show: whatever was explicitly
+    # picked in the location selector, falling back to the main child
+    # filter, then to the first permitted child.
+    location_history = None
+    location_children = children if can_view_location else []
+    effective_location_child_id = ""
+    if location_children:
+        if location_child_id in child_names:
+            effective_location_child_id = location_child_id
+        elif child_id in child_names:
+            effective_location_child_id = child_id
+        else:
+            effective_location_child_id = location_children[0].id
+    # Keep the card expanded across a reload triggered by its own child
+    # selector (a plain GET form submit) -- but stay collapsed by default
+    # on a fresh page load, since the map is the heaviest thing on this
+    # page to render.
+    location_section_open = "location_child_id" in request.query_params
+    if effective_location_child_id:
         location_events = session.exec(
             select(ChangeEvent)
-            .where(ChangeEvent.child_id == child_id)
+            .where(ChangeEvent.child_id == effective_location_child_id)
             .where(ChangeEvent.field_path.like("location.%"))
             .order_by(ChangeEvent.detected_at.asc(), ChangeEvent.id.asc())
         ).all()
-        location_fixes = _reconstruct_location_fixes(session.get(LatestSnapshot, child_id), location_events, tz)
-        return render(request, "history.html", session, {
-            "setup_completed": True,
-            "history_mode": "location",
-            "children": children,
-            "selected_child_id": child_id,
-            "selected_category": selected_category,
-            "category_filters": _category_filter_options(),
-            "child_names": child_names,
-            "child_avatars": child_avatars,
-            "location_history_href": location_history_href,
-            "location_history": {
-                "child_id": child_id,
-                "child_name": child_names.get(child_id, child_id),
-                "child_avatar_url": child_avatars.get(child_id),
-                "fix_count": len(location_fixes),
-                "fixes": location_fixes,
-                "fixes_json": _safe_json(location_fixes),
-            },
-        })
+        location_fixes = _reconstruct_location_fixes(
+            session.get(LatestSnapshot, effective_location_child_id), location_events, tz
+        )
+        location_history = {
+            "child_id": effective_location_child_id,
+            "child_name": child_names.get(effective_location_child_id, effective_location_child_id),
+            "child_avatar_url": child_avatars.get(effective_location_child_id),
+            "fix_count": len(location_fixes),
+            "fixes": location_fixes,
+            "fixes_json": _safe_json(location_fixes),
+        }
 
     events_query = select(ChangeEvent).order_by(ChangeEvent.detected_at.desc(), ChangeEvent.id.desc())
     if child_id:
@@ -331,7 +324,7 @@ async def history(
     if selected_category:
         events = [e for e in events if category_for_field_path(e.field_path) == selected_category]
     total_events = len(events)
-    total_pages = max((total_events + _PAGE_SIZE - 1) // _PAGE_SIZE, 1)
+    total_pages = max((total_events + page_size - 1) // page_size, 1)
     if not full_pagination:
         # "history:full_pagination" off means a guest only ever sees the
         # single most recent page -- older pages aren't reachable at all,
@@ -342,7 +335,7 @@ async def history(
     # back onto the last real page instead of silently rendering an empty
     # table with no indication anything went wrong.
     page = min(page, total_pages)
-    events = events[(page - 1) * _PAGE_SIZE:page * _PAGE_SIZE]
+    events = events[(page - 1) * page_size:page * page_size]
     failures = (
         []
         if guest_perms is not None
@@ -394,19 +387,22 @@ async def history(
 
     return render(request, "history.html", session, {
         "setup_completed": True,
-        "history_mode": "list",
         "rows": rows,
         "failures": failure_rows,
         "children": children,
         "selected_child_id": child_id,
         "selected_category": selected_category,
         "category_filters": _category_filter_options(),
-        "location_history_href": location_history_href,
         "child_names": child_names,
         "child_avatars": child_avatars,
         "last_poll_by_child": last_poll_by_child,
         "page": page,
+        "page_size": page_size,
+        "page_size_options": _PAGE_SIZE_OPTIONS,
         "total_pages": total_pages,
         "total_events": total_events,
         "show_actor": show_actor,
+        "location_history": location_history,
+        "location_children": location_children,
+        "location_section_open": location_section_open,
     })

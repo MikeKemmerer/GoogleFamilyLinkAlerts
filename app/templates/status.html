@@ -110,6 +110,7 @@
       {% if summary.app_usage_today %}
         <div class="app-usage-panel">
           <h3 class="app-usage-title">App usage today</h3>
+          <p class="hint">Based on the device's own day/timezone (as reported by Family Link) -- may not exactly match the "used today" total above, which comes from Family Link's own daily-limit accounting and can use a different day boundary.</p>
           <div class="app-usage-chart" aria-label="Today's app usage breakdown for {{ summary.child.name }}">
             {% for app in summary.app_usage_today %}
               <div

@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **History page: "Detected changes" is now collapsible**, and the number
+  of events shown per page is configurable (25/50/100, saved via a
+  dropdown in the filter bar).
+- **History page: the location-history map is now embedded directly on
+  the page** (in its own collapsible section) instead of living behind a
+  separate "view location history" link/page swap. It has its own child
+  selector, independent of the main event filter, plus Play/Pause controls
+  that auto-advance the replay slider through recorded fixes.
+- **Fixed a remaining timezone mismatch on the Status page**: the "Usage
+  over the day" hourly chart was aggregated using "today" per the
+  configured *display* timezone, while the per-app usage list underneath
+  it (and the device's own usage total) is anchored to the device's own
+  day. The hourly chart now uses that same device-anchored day, so it no
+  longer disagrees with the per-app breakdown directly above it.
+- **Reverted the "Usage over the day" chart back to smoothed/linear
+  rendering** between hourly data points (per user feedback), while
+  keeping the previously-fixed viewport clipping (never plots past the
+  current hour) and correct stacked-sum y-axis scaling.
+- Documented, via an in-app hint, the one usage-total discrepancy that
+  can't be fixed in this app: Family Link's own "used today" total (used
+  for daily-limit enforcement) uses its own internal day boundary, which
+  is not guaranteed to match the device-anchored day used for the per-app
+  breakdown/hourly chart.
 - **Fixed the Status page map regression from the re-center control**
   (introduced right after it shipped): the accuracy marker/circle were
   being attached to the map *after* the first `setView()` call instead of

@@ -2,9 +2,7 @@
 {% block title %}History — Family Link Alerts{% endblock %}
 {% block body_class %}wide{% endblock %}
 {% block extra_head %}
-  {% if history_mode == "location" %}
   <link rel="stylesheet" href="/static/leaflet/leaflet.css">
-  {% endif %}
 {% endblock %}
 {% block content %}
 <h1><svg class="icon icon-lg"><use href="#icon-list"></use></svg>Change history</h1>
@@ -18,7 +16,6 @@
       <option value="{{ c.id }}" {% if c.id == selected_child_id %}selected{% endif %}>{{ c.name }}</option>
     {% endfor %}
   </select>
-  {% if history_mode != "location" %}
   <label for="category">Category</label>
   <select id="category" name="category" onchange="this.form.requestSubmit()">
     <option value="" {% if not selected_category %}selected{% endif %}>All categories</option>
@@ -26,21 +23,18 @@
       <option value="{{ category_filter.key }}" {% if category_filter.key == selected_category %}selected{% endif %}>{{ category_filter.label }}</option>
     {% endfor %}
   </select>
-  {% endif %}
+  <label for="page_size">Per page</label>
+  <select id="page_size" name="page_size" onchange="this.form.requestSubmit()">
+    {% for size in page_size_options %}
+      <option value="{{ size }}" {% if size == page_size %}selected{% endif %}>{{ size }}</option>
+    {% endfor %}
+  </select>
   <!-- Changing the filter always jumps back to page 1 -- otherwise
        filtering could land you on a now out-of-range page number. -->
   <input type="hidden" name="page" value="1">
-  {% if history_mode == "location" %}
-  <input type="hidden" name="view" value="location">
-  <a class="btn" href="/history{% if selected_child_id %}?child_id={{ selected_child_id }}{% endif %}">Back to event list</a>
-  {% elif location_history_href %}
-  <a class="btn history-location-link" href="{{ location_history_href }}">
-    <svg class="icon"><use href="#icon-map-pin"></use></svg> View location history
-  </a>
-  {% endif %}
 </form>
 {% endif %}
-{% if history_mode != "location" and child_names %}
+{% if child_names %}
 <p class="muted">
   Last successful poll —
   {% for cid, cname in child_names.items() %}
@@ -67,123 +61,150 @@
 </div>
 {% endif %}
 
-{% if history_mode == "location" %}
+{% if location_children %}
 <div class="card">
-  <h2><svg class="icon"><use href="#icon-map-pin"></use></svg>Location history</h2>
-  <p>
-    {% if location_history.child_avatar_url %}<img class="avatar-md" src="{{ location_history.child_avatar_url }}" alt="">{% endif %}
-    <strong>{{ location_history.child_name }}</strong>
-    <span class="muted">{{ location_history.fix_count }} recorded fix{% if location_history.fix_count != 1 %}es{% endif %}</span>
-  </p>
-  {% if not location_history.fixes %}
-    <p class="muted">No recorded location fixes yet.</p>
-  {% else %}
-    <div class="history-location-layout">
-      <div id="location-history-map" class="device-location-map history-location-map"></div>
-      <div class="history-location-panel">
-        <label for="location-history-slider">Scrub through recorded fixes</label>
-        <input
-          id="location-history-slider"
-          class="history-location-slider"
-          type="range"
-          min="0"
-          max="{{ location_history.fix_count - 1 }}"
-          step="1"
-          value="{{ location_history.fix_count - 1 }}"
-          {% if location_history.fix_count <= 1 %}disabled{% endif %}
-        >
-        <div id="location-history-meta" class="device-location-panel history-location-meta" data-fix-count="{{ location_history.fix_count }}">
-          <div class="hint"><strong>When:</strong> <span data-field="timestamp"></span></div>
-          <div class="hint"><strong>Place:</strong> <span data-field="place"></span></div>
-          <div class="hint"><strong>Accuracy:</strong> <span data-field="accuracy"></span></div>
-          <div class="hint"><strong>Coordinates:</strong> <span data-field="coordinates"></span></div>
+  <details class="history-location-details" {% if location_section_open %}open{% endif %}>
+    <summary><svg class="icon"><use href="#icon-map-pin"></use></svg>Location history</summary>
+    <form method="get" action="/history" class="filter-bar history-location-filter-bar">
+      <label for="location_child_id">Child</label>
+      <select id="location_child_id" name="location_child_id" onchange="this.form.requestSubmit()">
+        {% for c in location_children %}
+          <option value="{{ c.id }}" {% if location_history and c.id == location_history.child_id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <!-- Preserve the detected-changes filters/pagination across a
+           location-child change, and force the section to stay expanded
+           after the reload. -->
+      {% if selected_child_id %}<input type="hidden" name="child_id" value="{{ selected_child_id }}">{% endif %}
+      {% if selected_category %}<input type="hidden" name="category" value="{{ selected_category }}">{% endif %}
+      <input type="hidden" name="page" value="{{ page }}">
+      <input type="hidden" name="page_size" value="{{ page_size }}">
+    </form>
+    {% if not location_history or not location_history.fixes %}
+      <p class="muted">No recorded location fixes yet{% if location_history %} for {{ location_history.child_name }}{% endif %}.</p>
+    {% else %}
+      <p>
+        {% if location_history.child_avatar_url %}<img class="avatar-md" src="{{ location_history.child_avatar_url }}" alt="">{% endif %}
+        <strong>{{ location_history.child_name }}</strong>
+        <span class="muted">{{ location_history.fix_count }} recorded fix{% if location_history.fix_count != 1 %}es{% endif %}</span>
+      </p>
+      <div class="history-location-layout">
+        <div id="location-history-map" class="device-location-map history-location-map"></div>
+        <div class="history-location-panel">
+          <label for="location-history-slider">Scrub through recorded fixes</label>
+          <div class="history-location-controls">
+            <button type="button" id="location-history-play" class="btn history-location-play" aria-label="Play">
+              <svg class="icon"><use href="#icon-play"></use></svg>
+            </button>
+            <input
+              id="location-history-slider"
+              class="history-location-slider"
+              type="range"
+              min="0"
+              max="{{ location_history.fix_count - 1 }}"
+              step="1"
+              value="{{ location_history.fix_count - 1 }}"
+              {% if location_history.fix_count <= 1 %}disabled{% endif %}
+            >
+          </div>
+          <div id="location-history-meta" class="device-location-panel history-location-meta" data-fix-count="{{ location_history.fix_count }}">
+            <div class="hint"><strong>When:</strong> <span data-field="timestamp"></span></div>
+            <div class="hint"><strong>Place:</strong> <span data-field="place"></span></div>
+            <div class="hint"><strong>Accuracy:</strong> <span data-field="accuracy"></span></div>
+            <div class="hint"><strong>Coordinates:</strong> <span data-field="coordinates"></span></div>
+          </div>
         </div>
       </div>
-    </div>
-    <script id="location-history-fixes" type="application/json">{{ location_history.fixes_json | safe }}</script>
-  {% endif %}
-</div>
-{% else %}
-<div class="card">
-  <h2><svg class="icon"><use href="#icon-clock"></use></svg>Detected changes</h2>
-  {% if category_filters %}
-  <div class="history-category-pills">
-    <a href="/history{% if selected_child_id %}?child_id={{ selected_child_id }}{% endif %}" class="badge {% if not selected_category %}badge-good{% endif %}">All categories</a>
-    {% for category_filter in category_filters %}
-      <a
-        href="/history?category={{ category_filter.key }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}"
-        class="badge {% if category_filter.key == selected_category %}badge-good{% endif %}"
-      ><svg class="icon"><use href="#icon-{{ category_filter.icon }}"></use></svg>{{ category_filter.label }}</a>
-    {% endfor %}
-  </div>
-  {% endif %}
-  {% if not rows %}
-    <p class="muted">No changes detected yet.</p>
-  {% else %}
-  <table class="changes-table stack-mobile">
-    <colgroup>
-      <col style="width: 13%">
-      <col style="width: 12%">
-      <col style="width: 40%">
-      <col style="width: 17.5%">
-      <col style="width: 17.5%">
-    </colgroup>
-    <thead><tr><th>When</th><th>Child</th><th>Change</th><th>Old</th><th>New</th></tr></thead>
-    <tbody>
-    {% for row in rows %}
-      <tr>
-        <td data-label="When">{{ row.detected_at }}</td>
-        <td data-label="Child">{% if row.child_avatar_url %}<img class="avatar-sm" src="{{ row.child_avatar_url }}" alt="">{% endif %}{{ row.child_name }}</td>
-        <td data-label="Change">
-          <details>
-            <summary>
-              <svg class="icon"><use href="#icon-{{ row.category_icon or 'bell' }}"></use></svg>
-              {% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}
-              <span class="badge history-category-badge">{{ row.category_label }}</span>
-            </summary>
-            <div class="row-detail">
-              <div class="field-path">{{ row.field_path }}</div>
-              {% if row.old_raw is not none %}
-                <div>Raw old value: <span class="field-path">{{ row.old_raw }}</span></div>
-              {% endif %}
-              {% if row.new_raw is not none %}
-                <div>Raw new value: <span class="field-path">{{ row.new_raw }}</span></div>
-              {% endif %}
-              <div>Alert sent: {{ "Yes" if row.notified else "No" }}</div>
-            </div>
-          </details>
-        </td>
-        <td data-label="Old">{{ row.old_display }}</td>
-        <td data-label="New">{{ row.new_display }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-  {% if total_pages and total_pages > 1 %}
-  <nav class="pagination" aria-label="History pages">
-    <a class="btn {% if page <= 1 %}btn-disabled{% endif %}"
-       href="?page={{ page - 1 }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}"
-       {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>&larr; Newer</a>
-    <span class="muted">Page {{ page }} of {{ total_pages }} &middot; {{ total_events }} total changes</span>
-    <a class="btn {% if page >= total_pages %}btn-disabled{% endif %}"
-       href="?page={{ page + 1 }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}"
-       {% if page >= total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>Older &rarr;</a>
-  </nav>
-  {% endif %}
+      <script id="location-history-fixes" type="application/json">{{ location_history.fixes_json | safe }}</script>
+    {% endif %}
+  </details>
 </div>
 {% endif %}
+
+<div class="card">
+  <details class="history-changes-details" open>
+    <summary><svg class="icon"><use href="#icon-clock"></use></svg>Detected changes</summary>
+    {% if category_filters %}
+    <div class="history-category-pills">
+      <a href="/history{% if selected_child_id %}?child_id={{ selected_child_id }}{% endif %}" class="badge {% if not selected_category %}badge-good{% endif %}">All categories</a>
+      {% for category_filter in category_filters %}
+        <a
+          href="/history?category={{ category_filter.key }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}"
+          class="badge {% if category_filter.key == selected_category %}badge-good{% endif %}"
+        ><svg class="icon"><use href="#icon-{{ category_filter.icon }}"></use></svg>{{ category_filter.label }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if not rows %}
+      <p class="muted">No changes detected yet.</p>
+    {% else %}
+    <table class="changes-table stack-mobile">
+      <colgroup>
+        <col style="width: 13%">
+        <col style="width: 12%">
+        <col style="width: 40%">
+        <col style="width: 17.5%">
+        <col style="width: 17.5%">
+      </colgroup>
+      <thead><tr><th>When</th><th>Child</th><th>Change</th><th>Old</th><th>New</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td data-label="When">{{ row.detected_at }}</td>
+          <td data-label="Child">{% if row.child_avatar_url %}<img class="avatar-sm" src="{{ row.child_avatar_url }}" alt="">{% endif %}{{ row.child_name }}</td>
+          <td data-label="Change">
+            <details>
+              <summary>
+                <svg class="icon"><use href="#icon-{{ row.category_icon or 'bell' }}"></use></svg>
+                {% if row.icon_url %}<img class="app-icon-sm" src="{{ row.icon_url }}" alt="">{% endif %}{{ row.label }}
+                <span class="badge history-category-badge">{{ row.category_label }}</span>
+              </summary>
+              <div class="row-detail">
+                <div class="field-path">{{ row.field_path }}</div>
+                {% if row.old_raw is not none %}
+                  <div>Raw old value: <span class="field-path">{{ row.old_raw }}</span></div>
+                {% endif %}
+                {% if row.new_raw is not none %}
+                  <div>Raw new value: <span class="field-path">{{ row.new_raw }}</span></div>
+                {% endif %}
+                <div>Alert sent: {{ "Yes" if row.notified else "No" }}</div>
+              </div>
+            </details>
+          </td>
+          <td data-label="Old">{{ row.old_display }}</td>
+          <td data-label="New">{{ row.new_display }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if total_pages and total_pages > 1 %}
+    <nav class="pagination" aria-label="History pages">
+      <a class="btn {% if page <= 1 %}btn-disabled{% endif %}"
+         href="?page={{ page - 1 }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}&page_size={{ page_size }}"
+         {% if page <= 1 %}aria-disabled="true" tabindex="-1"{% endif %}>&larr; Newer</a>
+      <span class="muted">Page {{ page }} of {{ total_pages }} &middot; {{ total_events }} total changes</span>
+      <a class="btn {% if page >= total_pages %}btn-disabled{% endif %}"
+         href="?page={{ page + 1 }}{% if selected_child_id %}&child_id={{ selected_child_id }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}&page_size={{ page_size }}"
+         {% if page >= total_pages %}aria-disabled="true" tabindex="-1"{% endif %}>Older &rarr;</a>
+    </nav>
+    {% endif %}
+  </details>
+</div>
 {% endblock %}
 {% block extra_scripts %}
-  {% if history_mode == "location" and location_history.fixes %}
+  {% if location_history and location_history.fixes %}
   <script src="/static/leaflet/leaflet.js"></script>
   <script src="/static/map-controls.js"></script>
   <script>
     (function () {
+      var initialized = false;
       function initMap() {
+      if (initialized) return;
       if (!window.L) { console.error("Family Link Alerts: leaflet.js failed to load; map disabled."); return; }
       var fixes = JSON.parse(document.getElementById("location-history-fixes").textContent || "[]");
       if (!fixes.length) return;
+      initialized = true;
       delete L.Icon.Default.prototype._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: "/static/leaflet/images/marker-icon-2x.png",
@@ -193,6 +214,7 @@
 
       var slider = document.getElementById("location-history-slider");
       var meta = document.getElementById("location-history-meta");
+      var playButton = document.getElementById("location-history-play");
       var coords = fixes.map(function (fix) { return [fix.latitude, fix.longitude]; });
       var map = L.map("location-history-map", { attributionControl: false });
       L.tileLayer("/tiles/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
@@ -212,8 +234,9 @@
       recenter();
       addRecenterControl(map, recenter);
       // Guards against the map being initialized while its container had a
-      // stale/zero layout size -- without this, tiles can render blank/grey
-      // until the window is manually resized.
+      // stale/zero layout size (e.g. this whole section living inside a
+      // <details> that was just opened) -- without this, tiles can render
+      // blank/grey until the window is manually resized.
       setTimeout(function () { map.invalidateSize(); }, 150);
 
       var marker = L.marker(coords[coords.length - 1]).addTo(map);
@@ -248,15 +271,69 @@
         setMeta("coordinates", fix.latitude.toFixed(5) + ", " + fix.longitude.toFixed(5));
       }
 
+      // Playback: steps the slider forward on a timer, like a video
+      // scrubber, until it reaches the last fix (or is paused). Restarts
+      // from the beginning if Play is pressed again after reaching the end.
+      var PLAYBACK_INTERVAL_MS = 800;
+      var playTimer = null;
+
+      function setPlaying(playing) {
+        if (playing === !!playTimer) return;
+        if (playing) {
+          if (parseInt(slider.value, 10) >= fixes.length - 1) {
+            slider.value = 0;
+            renderFix(0);
+          }
+          playTimer = setInterval(function () {
+            var next = (parseInt(slider.value, 10) || 0) + 1;
+            if (next >= fixes.length) {
+              setPlaying(false);
+              return;
+            }
+            slider.value = next;
+            renderFix(next);
+          }, PLAYBACK_INTERVAL_MS);
+          playButton.innerHTML = '<svg class="icon"><use href="#icon-pause"></use></svg>';
+          playButton.setAttribute("aria-label", "Pause");
+        } else {
+          clearInterval(playTimer);
+          playTimer = null;
+          playButton.innerHTML = '<svg class="icon"><use href="#icon-play"></use></svg>';
+          playButton.setAttribute("aria-label", "Play");
+        }
+      }
+
+      if (fixes.length > 1) {
+        playButton.addEventListener("click", function () {
+          setPlaying(!playTimer);
+        });
+      } else {
+        playButton.disabled = true;
+      }
+
       slider.addEventListener("input", function () {
+        setPlaying(false);
         renderFix(parseInt(slider.value, 10) || 0);
       });
       renderFix(parseInt(slider.value, 10) || 0);
       }
-      if (document.readyState === "complete") {
-        initMap();
-      } else {
-        window.addEventListener("load", initMap);
+
+      var details = document.querySelector(".history-location-details");
+      if (details) {
+        if (details.open) {
+          if (document.readyState === "complete") {
+            initMap();
+          } else {
+            window.addEventListener("load", initMap);
+          }
+        } else {
+          // Defer initializing the map (and its Leaflet size calculations)
+          // until the collapsible section is actually opened, since a
+          // hidden <details> has zero layout size.
+          details.addEventListener("toggle", function () {
+            if (details.open) initMap();
+          });
+        }
       }
     })();
   </script>

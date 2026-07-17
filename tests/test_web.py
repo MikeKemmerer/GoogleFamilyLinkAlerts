@@ -706,6 +706,40 @@ def test_guest_status_hides_app_usage_without_screen_time_permission(monkeypatch
     assert "YouTube" not in resp.text
 
 
+def test_status_page_hourly_chart_uses_device_day_not_display_timezone_today(monkeypatch, client, engine):
+    """The hourly chart's day boundary must match the same device-anchored
+    day used by the per-app usage breakdown (``_latest_app_usage_date``),
+    not "today" per the admin's configured display timezone -- otherwise
+    the chart can silently disappear (or show a different day) whenever
+    the display timezone and the device's own timezone disagree about
+    what day it currently is."""
+    from app.db.models import AppUsageHourlyBucket
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        # _FROZEN_STATUS_NOW is 2026-07-16 18:00 UTC -- in this far-ahead
+        # display timezone that's already 2026-07-17, a full day later than
+        # the device's own date on every appUsageSessions/bucket row below.
+        settings_store.set_timezone(s, "Pacific/Kiritimati")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=3, seconds=600.0,
+        ))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "Usage over the day" in resp.text
+    assert "app-usage-hourly-chart" in resp.text
+
+
 def test_status_page_shows_hourly_usage_chart_when_buckets_recorded(monkeypatch, client, engine):
     from app.db.models import AppUsageHourlyBucket
 
@@ -917,7 +951,7 @@ def test_history_page_shows_location_icon_and_label(client, engine):
     assert "location.latitude" in resp.text
 
 
-def test_history_page_links_to_location_history_only_when_child_has_location_events(client, engine):
+def test_history_page_location_section_lists_all_permitted_children(client, engine):
     with Session(engine) as s:
         s.add(Child(id="child1", name="Kiddo"))
         s.add(Child(id="child2", name="Other Kid"))
@@ -926,15 +960,20 @@ def test_history_page_links_to_location_history_only_when_child_has_location_eve
 
     resp_child1 = client.get("/history", params={"child_id": "child1"})
     assert resp_child1.status_code == 200
-    assert "View location history" in resp_child1.text
-    assert "view=location" in resp_child1.text
+    assert "Location history" in resp_child1.text
+    assert 'id="location_child_id"' in resp_child1.text
+    # The location selector always lists every permitted child, regardless
+    # of which one the main "Filter by child" control is set to, or
+    # whether that child has any recorded fixes yet.
+    assert "Kiddo" in resp_child1.text
+    assert "Other Kid" in resp_child1.text
 
-    resp_child2 = client.get("/history", params={"child_id": "child2"})
+    resp_child2 = client.get("/history", params={"location_child_id": "child2"})
     assert resp_child2.status_code == 200
-    assert "View location history" not in resp_child2.text
+    assert "No recorded location fixes yet" in resp_child2.text
 
 
-def test_history_location_view_renders_map_slider_and_fix_count(client, engine):
+def test_history_location_section_renders_map_slider_and_fix_count(client, engine):
     from app.db import settings_store
 
     with Session(engine) as s:
@@ -943,15 +982,52 @@ def test_history_location_view_renders_map_slider_and_fix_count(client, engine):
         _add_location_history(s, "child1")
         s.commit()
 
-    resp = client.get("/history", params={"child_id": "child1", "view": "location"})
+    resp = client.get("/history", params={"location_child_id": "child1"})
     assert resp.status_code == 200
     assert "Location history" in resp.text
     assert 'id="location-history-map"' in resp.text
     assert 'type="range"' in resp.text
     assert 'data-fix-count="3"' in resp.text
+    assert 'id="location-history-play"' in resp.text
     assert "Park" in resp.text
     assert "Library" in resp.text
     assert "Home" in resp.text
+    # The section stays expanded (rather than collapsed by default) once
+    # its own child selector has been explicitly used.
+    assert 'history-location-details" open' in resp.text
+
+
+def test_history_page_location_section_collapsed_by_default(client, engine):
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo"))
+        _add_location_history(s, "child1")
+        s.commit()
+
+    resp = client.get("/history")
+    assert resp.status_code == 200
+    assert 'history-location-details" open' not in resp.text
+
+
+def test_history_page_configurable_page_size(client, engine):
+    with Session(engine) as s:
+        s.add(Child(id="child1", name="Kiddo"))
+        for i in range(30):
+            s.add(ChangeEvent(child_id="child1", field_path=f"apps.app{i}.blocked", old_value=False, new_value=True))
+        s.commit()
+
+    # Default page size (50) comfortably fits all 30 events on one page --
+    # no pagination nav rendered at all.
+    resp_default = client.get("/history")
+    assert "Page 1 of" not in resp_default.text
+
+    resp_25 = client.get("/history", params={"page_size": 25})
+    assert "Page 1 of 2" in resp_25.text
+    assert "30 total changes" in resp_25.text
+
+    # An invalid/unsupported page size falls back to the default rather
+    # than erroring or allowing an arbitrarily large page.
+    resp_invalid = client.get("/history", params={"page_size": 7})
+    assert "Page 1 of" not in resp_invalid.text
 
 
 def test_history_page_paginates_events(client, engine):

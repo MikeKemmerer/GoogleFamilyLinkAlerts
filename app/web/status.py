@@ -105,6 +105,13 @@ def _build_hourly_app_usage_chart(
     if there's nothing recorded yet for this child/day -- e.g. the feature
     was only just enabled, so no deltas have been observed yet.
 
+    ``target_date`` should be the same device-anchored day used for the
+    per-app usage breakdown (see ``_latest_app_usage_date``) -- not the
+    admin's configured display timezone's "today" -- so this chart's total
+    stays consistent with that breakdown instead of silently reflecting a
+    different calendar day whenever the device's own timezone differs from
+    the display timezone.
+
     Only elapsed hours (0..current_hour, inclusive) are plotted -- the
     chart's x-axis ends at "now" rather than projecting a flat line across
     hours of the day that haven't happened yet.
@@ -172,11 +179,12 @@ def _build_hourly_app_usage_chart(
 
     # Build an SVG stacked-area chart by hand (no charting library, matching
     # the project's no-CDN/no-JS-framework convention) -- one <path> per
-    # app, each drawn as a step function (flat within each hour bucket,
-    # vertical jump at hour boundaries) since the underlying data is only
-    # ever known at hourly resolution. A step shape reads far more clearly
-    # here than linear interpolation, which draws misleading diagonal
-    # "ramps" across mostly-flat hours.
+    # app, using straight line segments between each hour's cumulative
+    # value (smoothed rather than a step function -- a step shape reads as
+    # more "precise" than the data actually is, since usage is only ever
+    # observed at hourly resolution anyway). The last point is extended
+    # flat to the right edge of the plotted domain so the area fills all
+    # the way to "now" instead of stopping short at the last plotted hour.
     chart_width, chart_height = 720, 220
 
     def x_for_hour(hour: float) -> float:
@@ -185,21 +193,19 @@ def _build_hourly_app_usage_chart(
     def y_for_minutes(minutes: float) -> float:
         return chart_height - (minutes / max_cumulative) * chart_height
 
-    def step_points(values: list[float]) -> list[tuple[float, float]]:
-        points: list[tuple[float, float]] = []
-        for hour, value in enumerate(values):
-            points.append((hour, value))
-            points.append((hour + 1, value))
+    def line_points(values: list[float]) -> list[tuple[float, float]]:
+        points = [(hour, values[hour]) for hour in range(domain_hours)]
+        points.append((domain_hours, values[-1]))
         return points
 
     running_top = [0.0] * domain_hours
     for layer in series:
         bottom = list(running_top)
         top = [bottom[h] + layer["cumulative_minutes"][h] for h in range(domain_hours)]
-        top_step = step_points(top)
-        bottom_step = step_points(bottom)
-        top_svg = " ".join(f"{x_for_hour(x):.1f},{y_for_minutes(y):.1f}" for x, y in top_step)
-        bottom_svg = " ".join(f"{x_for_hour(x):.1f},{y_for_minutes(y):.1f}" for x, y in reversed(bottom_step))
+        top_line = line_points(top)
+        bottom_line = line_points(bottom)
+        top_svg = " ".join(f"{x_for_hour(x):.1f},{y_for_minutes(y):.1f}" for x, y in top_line)
+        bottom_svg = " ".join(f"{x_for_hour(x):.1f},{y_for_minutes(y):.1f}" for x, y in reversed(bottom_line))
         layer["path"] = f"M {top_svg} L {bottom_svg} Z"
         running_top = top
 
@@ -409,7 +415,7 @@ def _build_device_summaries(
                 _build_hourly_app_usage_chart(
                     session,
                     child.id,
-                    local_today,
+                    app_usage_date,
                     app_titles_from_snapshot({"apps_and_usage": apps_and_usage}),
                     local_now.hour,
                 )

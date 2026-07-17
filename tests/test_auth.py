@@ -327,8 +327,12 @@ def test_guest_location_history_requires_location_permission(client, engine):
         session.commit()
 
     client.get("/login/guest")
-    resp = client.get("/history", params={"child_id": "c1", "view": "location"})
-    assert resp.status_code == 403
+    resp = client.get("/history", params={"child_id": "c1", "location_child_id": "c1"})
+    # Without "data:location", the whole location-history card is omitted
+    # rather than erroring -- the rest of the page is still usable.
+    assert resp.status_code == 200
+    assert "Location history" not in resp.text
+    assert 'id="location-history-map"' not in resp.text
 
 
 def test_guest_location_history_allows_authorized_guest(client, engine):
@@ -342,7 +346,7 @@ def test_guest_location_history_allows_authorized_guest(client, engine):
         session.commit()
 
     client.get("/login/guest")
-    resp = client.get("/history", params={"child_id": "c1", "view": "location"})
+    resp = client.get("/history", params={"child_id": "c1", "location_child_id": "c1"})
     assert resp.status_code == 200
     assert "Location history" in resp.text
     assert 'id="location-history-map"' in resp.text

@@ -190,16 +190,27 @@ button:hover, .btn:hover { background: var(--accent-hover); }
 .filter-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .filter-bar label { margin: 0; font-weight: 600; font-size: 0.85rem; }
 .filter-bar select { margin: 0; width: auto; }
-.history-location-link { margin-left: auto; }
 .history-category-pills { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.2rem 0 0.85rem; }
 .history-category-badge { margin-left: 0.45rem; vertical-align: middle; }
+/* Collapsible "Location history" / "Detected changes" section headers. */
+.history-location-details > summary,
+.history-changes-details > summary {
+  cursor: pointer; font-weight: 600; font-size: 1.1rem; display: flex; align-items: center; gap: 0.4rem;
+}
+.history-location-filter-bar { margin: 0.6rem 0 0.85rem; }
 .history-location-layout {
   display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
   gap: 1rem; align-items: start;
 }
 .history-location-map { min-height: 320px; }
 .history-location-panel label { display: block; margin-bottom: 0.45rem; font-weight: 600; }
-.history-location-slider { width: 100%; }
+.history-location-controls { display: flex; align-items: center; gap: 0.5rem; }
+.history-location-play {
+  margin: 0; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; padding: 0;
+  display: flex; align-items: center; justify-content: center; border-radius: 999px;
+}
+.history-location-play:disabled { background: var(--surface-alt); color: var(--text-muted); cursor: default; }
+.history-location-slider { flex: 1 1 auto; width: auto; }
 .history-location-meta { margin-top: 0.75rem; }
 
 table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
