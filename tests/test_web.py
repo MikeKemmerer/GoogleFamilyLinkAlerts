@@ -617,6 +617,42 @@ def test_status_page_shows_app_usage_chart_for_today(monkeypatch, client, engine
     assert resp.text.index("YouTube") < resp.text.index("Spotify Kids")
 
 
+def test_status_page_app_usage_uses_latest_session_date_not_display_timezone_today(monkeypatch, client, engine):
+    """If the display timezone's "today" doesn't line up with the most
+    recent calendar day present in Family Link's own appUsageSessions data
+    (e.g. because the device's real timezone differs from the configured
+    display timezone), the per-app breakdown should still aggregate the
+    freshest day present in the data rather than come up empty -- keeping
+    it aligned with the device's own "used today" total, which Family Link
+    computes using its own (not our) day boundary."""
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        # _FROZEN_STATUS_NOW is 2026-07-16, but every session Family Link
+        # reported is dated the day before -- e.g. the device's own
+        # timezone hasn't rolled over to the 16th yet.
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage(app_usage_sessions=[
+            {
+                "date": {"year": 2026, "month": 7, "day": 15},
+                "usage": "3600.0s",
+                "appId": {"androidAppPackageName": "com.google.android.youtube"},
+            },
+        ])))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "App usage today" in resp.text
+    assert "YouTube" in resp.text
+    assert "1h" in resp.text
+
+
 def test_status_page_excludes_other_calendar_days_from_app_usage(monkeypatch, client, engine):
     monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
     monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
@@ -730,6 +766,40 @@ def test_status_page_hourly_chart_ignores_buckets_after_current_hour(monkeypatch
     # _FROZEN_STATUS_NOW is hour 18 -- the hour-22 bucket must not push the
     # displayed max/total above what's accounted for through "now".
     assert "(0–10m)" in resp.text
+    assert "(0–15m)" not in resp.text
+
+
+def test_status_page_hourly_chart_scales_to_stacked_total_not_single_app_max(monkeypatch, client, engine):
+    """The chart's y-axis max must reflect the *sum* of every app's usage
+    at the tallest hour (the top of the stacked area), not just whichever
+    single app happens to have the highest total on its own."""
+    from app.db.models import AppUsageHourlyBucket
+
+    monkeypatch.setattr(status, "build_auth_client", lambda: FakeAuthClient(healthy=True, cookies=[{"name": "SAPISID"}]))
+    monkeypatch.setattr(status, "datetime", _FrozenStatusDatetime)
+
+    with Session(engine) as s:
+        from app.db import settings_store
+
+        settings_store.mark_setup_completed(s)
+        settings_store.set_timezone(s, "UTC")
+        s.add(Child(id="child1", name="Kiddo", enabled=True))
+        s.add(LatestSnapshot(child_id="child1", data=_status_snapshot_with_app_usage()))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.google.android.youtube",
+            local_date="2026-07-16", hour=9, seconds=600.0,  # 10m
+        ))
+        s.add(AppUsageHourlyBucket(
+            child_id="child1", package_name="com.spotify.music",
+            local_date="2026-07-16", hour=9, seconds=900.0,  # 15m
+        ))
+        s.commit()
+
+    resp = client.get("/")
+    assert resp.status_code == 200
+    # Stacked total at hour 9 is 10m + 15m = 25m -- must scale to that, not
+    # to Spotify's own 15m max.
+    assert "(0–25m)" in resp.text
     assert "(0–15m)" not in resp.text
 
 

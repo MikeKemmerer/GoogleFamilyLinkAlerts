@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **Fixed the Status page map regression from the re-center control**
+  (introduced right after it shipped): the accuracy marker/circle were
+  being attached to the map *after* the first `setView()` call instead of
+  before, which reproduced the exact "map never renders" bug from a few
+  versions ago -- no pin, no accuracy circle, and no visible re-center/zoom
+  controls (the crash happened before those lines ran). Layers are now
+  attached before the map's first view is set, as Leaflet requires. Also
+  re-enabled the on-map zoom control (+/-), which had been hidden.
+- **Fixed the "Usage over the day" chart's y-axis scaling to the wrong
+  value.** It was scaling to the single highest-usage app's own total
+  instead of the *sum* of every app's usage at the tallest hour (the true
+  top of the stacked area) -- so the stacked area could visually extend
+  past the top of the chart whenever more than one app had usage that
+  day.
+- **Fixed a mismatch between "total time used today" and the sum of the
+  per-app usage breakdown.** The per-app breakdown was aggregated using
+  "today" per the configured *display* timezone, while Family Link's own
+  device usage total uses its own (not necessarily matching) day
+  boundary. The per-app breakdown now aggregates whichever calendar day is
+  most recent in Family Link's own usage data, keeping it aligned with the
+  device total regardless of the display timezone setting.
 - **Added a y-axis to the "Usage over the day" chart** (Status page):
   cumulative-time tick labels (0/25/50/75/100% of the day's max) plus
   matching dashed gridlines, laid out so the top and bottom labels are

@@ -49,6 +49,23 @@ def _battery_badge_class(level: int | None) -> str:
     return "badge-bad"
 
 
+def _latest_app_usage_date(apps_and_usage: dict[str, Any] | None) -> date | None:
+    """Return the most recent calendar day present in ``appUsageSessions``.
+
+    Each session's ``date`` is assigned by Family Link itself (not by us),
+    using whatever day boundary/timezone it tracks for that child's device
+    -- the same boundary it uses to compute the device's own ``used_minutes``
+    total. Picking the freshest date present in the data (rather than
+    "today" per our own configurable display timezone) keeps the per-app
+    usage breakdown's day boundary aligned with that device total, even
+    when the display timezone setting differs from the device's actual
+    timezone -- avoiding a mismatch between "total time used today" and
+    the sum of the per-app breakdown.
+    """
+    dates = {session_date for (_, session_date) in usage_totals_by_app_and_date(apps_and_usage)}
+    return max(dates) if dates else None
+
+
 def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date: date) -> list[dict[str, Any]]:
     """Aggregate ``appUsageSessions`` for one local calendar day."""
     if not isinstance(apps_and_usage, dict):
@@ -120,7 +137,6 @@ def _build_hourly_app_usage_chart(
     max_hour = max(0, min(current_hour, 23))
     domain_hours = max_hour + 1  # x-axis spans [0, domain_hours) -- i.e. through "now"
 
-    max_cumulative = 0.0
     series = []
     for package_name in ordered_packages:
         hourly = seconds_by_app_hour.get(package_name, {})
@@ -129,7 +145,6 @@ def _build_hourly_app_usage_chart(
         for hour in range(domain_hours):
             running_total += hourly.get(hour, 0.0)
             cumulative_minutes.append(running_total / 60.0)
-        max_cumulative = max(max_cumulative, cumulative_minutes[-1])
         series.append(
             {
                 "package_name": package_name,
@@ -139,6 +154,18 @@ def _build_hourly_app_usage_chart(
                 "total_display": format_usage_duration(totals_by_app[package_name]),
             }
         )
+
+    # The chart's true visual maximum is the top of the topmost (stacked)
+    # band -- i.e. the *sum* of every app's cumulative usage at whichever
+    # hour the stack is tallest (always the last elapsed hour, since
+    # cumulative totals only ever increase) -- not any single app's own
+    # highest total. Using a per-app max here would under-scale the y-axis
+    # whenever more than one app has usage, causing the stacked area to
+    # visually overflow past the axis's stated max.
+    max_cumulative = max(
+        (sum(layer["cumulative_minutes"][hour] for layer in series) for hour in range(domain_hours)),
+        default=0.0,
+    )
 
     if max_cumulative <= 0:
         return None
@@ -335,6 +362,7 @@ def _build_device_summaries(
 
         summary_location = None
         location = _build_location_context((data or {}).get("location"), tz) if location_tracking_enabled else None
+        app_usage_date = _latest_app_usage_date(apps_and_usage) or local_today
         if location:
             matched_device = None
             source_name = location.get("source_device_name")
@@ -374,7 +402,7 @@ def _build_device_summaries(
             "devices": devices,
             "location": summary_location,
             "app_usage_today": (
-                _build_app_usage_for_day(apps_and_usage, local_today)
+                _build_app_usage_for_day(apps_and_usage, app_usage_date)
                 if show_screen_time else []
             ),
             "app_usage_hourly": (
