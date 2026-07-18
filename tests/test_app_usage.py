@@ -63,4 +63,10 @@ def test_hourly_usage_deltas_drops_non_positive_changes():
 def test_format_usage_duration_and_color_var():
     assert app_usage.format_usage_duration(65) == "1m"
     assert app_usage.format_usage_duration(3665) == "1h 1m"
-    assert app_usage.app_usage_color_var("com.a") in app_usage.APP_USAGE_COLOR_VARS
+    assert app_usage.app_usage_color_var(0) in app_usage.APP_USAGE_COLOR_VARS
+    # Colors are assigned by rank (0-based), not hashed from the package
+    # name, so consecutive ranks always land on different, well-separated
+    # palette entries -- and it wraps around cleanly past the palette size.
+    assert app_usage.app_usage_color_var(0) == "--app-usage-color-1"
+    assert app_usage.app_usage_color_var(1) == "--app-usage-color-2"
+    assert app_usage.app_usage_color_var(8) == app_usage.app_usage_color_var(0)

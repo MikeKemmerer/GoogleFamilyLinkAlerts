@@ -89,11 +89,15 @@ def _build_app_usage_for_day(apps_and_usage: dict[str, Any] | None, target_date:
             "seconds": seconds,
             "duration_display": format_usage_duration(seconds),
             "width_pct": (seconds / total_seconds) * 100,
-            "color_var": app_usage_color_var(package_name),
         }
         for package_name, seconds in totals.items()
     ]
     usage.sort(key=lambda item: (-item["seconds"], item["app_title"].casefold(), item["package_name"]))
+    # Assign colors by final rank (not by hashing the package name) so
+    # neighboring segments in the usage bar always contrast well -- see
+    # app_usage_color_var's docstring.
+    for rank, item in enumerate(usage):
+        item["color_var"] = app_usage_color_var(rank)
     return usage
 
 
@@ -145,7 +149,7 @@ def _build_hourly_app_usage_chart(
     domain_hours = max_hour + 1  # x-axis spans [0, domain_hours) -- i.e. through "now"
 
     series = []
-    for package_name in ordered_packages:
+    for rank, package_name in enumerate(ordered_packages):
         hourly = seconds_by_app_hour.get(package_name, {})
         cumulative_minutes = []
         running_total = 0.0
@@ -156,7 +160,7 @@ def _build_hourly_app_usage_chart(
             {
                 "package_name": package_name,
                 "app_title": app_titles.get(package_name, package_name),
-                "color_var": app_usage_color_var(package_name),
+                "color_var": app_usage_color_var(rank),
                 "cumulative_minutes": cumulative_minutes,
                 "total_display": format_usage_duration(totals_by_app[package_name]),
             }

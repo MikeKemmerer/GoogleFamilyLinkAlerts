@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **App usage colors are now assigned by usage rank, not hashed from the
+  package name**, so two apps that happen to land next to each other in
+  the usage-sorted summary bar or stacked hourly chart always get
+  different, well-contrasted colors instead of occasionally repeating or
+  clashing. The color palette itself was also reordered so consecutive
+  entries have maximally distinct hues.
 - **History page: renamed "location fixes" to "locations" in user-facing
   text** (e.g. "No recorded locations yet", "3 recorded locations").
 - **History page: moved the Play/Pause button and scrub slider to sit

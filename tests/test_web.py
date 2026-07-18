@@ -592,6 +592,38 @@ def test_build_app_usage_for_day_aggregates_sorts_and_falls_back_to_package_name
     assert usage[0]["duration_display"] == "3m"
     assert usage[1]["app_title"] == "com.discord"
     assert usage[1]["seconds"] == pytest.approx(90.0)
+    # Colors are assigned by final usage-sorted rank, not hashed per app --
+    # so neighboring segments always get distinct, well-separated colors.
+    assert usage[0]["color_var"] == "--app-usage-color-1"
+    assert usage[1]["color_var"] == "--app-usage-color-2"
+
+
+def test_build_app_usage_for_day_gives_every_neighboring_app_a_distinct_color():
+    """Regression test: colors must never repeat between two apps that end
+    up adjacent in the usage-sorted list, which could previously happen by
+    coincidence since colors were hashed from the package name rather than
+    assigned by rank."""
+    package_names = [f"com.app{i}" for i in range(6)]
+    usage = status._build_app_usage_for_day(
+        {
+            "apps": [{"packageName": pkg, "title": pkg} for pkg in package_names],
+            "appUsageSessions": [
+                {
+                    "date": {"year": 2026, "month": 7, "day": 16},
+                    # Descending usage so ranks are stable/predictable.
+                    "usage": f"{(6 - i) * 60}.0s",
+                    "appId": {"androidAppPackageName": pkg},
+                }
+                for i, pkg in enumerate(package_names)
+            ],
+        },
+        _FROZEN_STATUS_NOW.date(),
+    )
+
+    color_vars = [item["color_var"] for item in usage]
+    assert len(color_vars) == len(package_names)
+    for i in range(len(color_vars) - 1):
+        assert color_vars[i] != color_vars[i + 1]
 
 
 def test_status_page_shows_app_usage_chart_for_today(monkeypatch, client, engine):

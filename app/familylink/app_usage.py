@@ -15,7 +15,6 @@ hour it was *detected* during a poll, not the hour it was actually used.
 """
 from __future__ import annotations
 
-import hashlib
 from datetime import date
 
 APP_USAGE_COLOR_VARS = [
@@ -30,9 +29,19 @@ APP_USAGE_COLOR_VARS = [
 ]
 
 
-def app_usage_color_var(package_name: str) -> str:
-    digest = hashlib.sha1(package_name.encode("utf-8")).digest()
-    return APP_USAGE_COLOR_VARS[digest[0] % len(APP_USAGE_COLOR_VARS)]
+def app_usage_color_var(rank: int) -> str:
+    """Return the color variable for the app at position ``rank`` (0-based)
+    within a usage-sorted list of apps for the same day/chart.
+
+    Colors are assigned by *rank*, not by hashing the package name, so that
+    neighboring apps in a usage-ordered visual (the summary bar's adjacent
+    segments, or the stacked chart's adjacent bands) always get different,
+    well-separated colors -- ``APP_USAGE_COLOR_VARS`` is ordered so that
+    consecutive entries have maximally distinct hues. Hashing the package
+    name instead could coincidentally assign the same (or a very similar)
+    color to two apps that end up sitting right next to each other.
+    """
+    return APP_USAGE_COLOR_VARS[rank % len(APP_USAGE_COLOR_VARS)]
 
 
 def parse_usage_seconds(value: object) -> float | None:
