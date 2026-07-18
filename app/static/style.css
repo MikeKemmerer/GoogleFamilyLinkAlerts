@@ -199,11 +199,9 @@ button:hover, .btn:hover { background: var(--accent-hover); }
 }
 .history-location-filter-bar { margin: 0.6rem 0 0.85rem; }
 .history-location-layout {
-  display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-  gap: 1rem; align-items: start;
+  display: flex; flex-direction: column; gap: 0.75rem;
 }
 .history-location-map { min-height: 320px; }
-.history-location-panel label { display: block; margin-bottom: 0.45rem; font-weight: 600; }
 .history-location-controls { display: flex; align-items: center; gap: 0.5rem; }
 .history-location-play {
   margin: 0; flex: 0 0 auto; width: 2.1rem; height: 2.1rem; padding: 0;
@@ -211,7 +209,7 @@ button:hover, .btn:hover { background: var(--accent-hover); }
 }
 .history-location-play:disabled { background: var(--surface-alt); color: var(--text-muted); cursor: default; }
 .history-location-slider { flex: 1 1 auto; width: auto; }
-.history-location-meta { margin-top: 0.75rem; }
+.history-location-meta { margin-top: 0; }
 
 table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
 th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
@@ -325,6 +323,4 @@ th, td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(
   }
   table.stack-mobile td:empty { display: none; }
   .btn, button { width: 100%; box-sizing: border-box; text-align: center; }
-  .history-location-layout { grid-template-columns: 1fr; }
-  .history-location-link { margin-left: 0; }
 }

@@ -4,6 +4,11 @@ All notable changes to this project are documented here.
 Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
+- **History page: renamed "location fixes" to "locations" in user-facing
+  text** (e.g. "No recorded locations yet", "3 recorded locations").
+- **History page: moved the Play/Pause button and scrub slider to sit
+  below the map** (previously alongside it in a side panel), so the map
+  gets the full width of the card.
 - **History page: "Detected changes" is now collapsible**, and the number
   of events shown per page is configurable (25/50/100, saved via a
   dropdown in the filter bar).

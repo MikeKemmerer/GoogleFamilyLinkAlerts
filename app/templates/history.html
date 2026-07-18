@@ -81,38 +81,36 @@
       <input type="hidden" name="page_size" value="{{ page_size }}">
     </form>
     {% if not location_history or not location_history.fixes %}
-      <p class="muted">No recorded location fixes yet{% if location_history %} for {{ location_history.child_name }}{% endif %}.</p>
+      <p class="muted">No recorded locations yet{% if location_history %} for {{ location_history.child_name }}{% endif %}.</p>
     {% else %}
       <p>
         {% if location_history.child_avatar_url %}<img class="avatar-md" src="{{ location_history.child_avatar_url }}" alt="">{% endif %}
         <strong>{{ location_history.child_name }}</strong>
-        <span class="muted">{{ location_history.fix_count }} recorded fix{% if location_history.fix_count != 1 %}es{% endif %}</span>
+        <span class="muted">{{ location_history.fix_count }} recorded location{% if location_history.fix_count != 1 %}s{% endif %}</span>
       </p>
       <div class="history-location-layout">
         <div id="location-history-map" class="device-location-map history-location-map"></div>
-        <div class="history-location-panel">
-          <label for="location-history-slider">Scrub through recorded fixes</label>
-          <div class="history-location-controls">
-            <button type="button" id="location-history-play" class="btn history-location-play" aria-label="Play">
-              <svg class="icon"><use href="#icon-play"></use></svg>
-            </button>
-            <input
-              id="location-history-slider"
-              class="history-location-slider"
-              type="range"
-              min="0"
-              max="{{ location_history.fix_count - 1 }}"
-              step="1"
-              value="{{ location_history.fix_count - 1 }}"
-              {% if location_history.fix_count <= 1 %}disabled{% endif %}
-            >
-          </div>
-          <div id="location-history-meta" class="device-location-panel history-location-meta" data-fix-count="{{ location_history.fix_count }}">
-            <div class="hint"><strong>When:</strong> <span data-field="timestamp"></span></div>
-            <div class="hint"><strong>Place:</strong> <span data-field="place"></span></div>
-            <div class="hint"><strong>Accuracy:</strong> <span data-field="accuracy"></span></div>
-            <div class="hint"><strong>Coordinates:</strong> <span data-field="coordinates"></span></div>
-          </div>
+        <div class="history-location-controls">
+          <button type="button" id="location-history-play" class="btn history-location-play" aria-label="Play">
+            <svg class="icon"><use href="#icon-play"></use></svg>
+          </button>
+          <input
+            id="location-history-slider"
+            class="history-location-slider"
+            type="range"
+            min="0"
+            max="{{ location_history.fix_count - 1 }}"
+            step="1"
+            value="{{ location_history.fix_count - 1 }}"
+            aria-label="Scrub through recorded locations"
+            {% if location_history.fix_count <= 1 %}disabled{% endif %}
+          >
+        </div>
+        <div id="location-history-meta" class="device-location-panel history-location-meta" data-fix-count="{{ location_history.fix_count }}">
+          <div class="hint"><strong>When:</strong> <span data-field="timestamp"></span></div>
+          <div class="hint"><strong>Place:</strong> <span data-field="place"></span></div>
+          <div class="hint"><strong>Accuracy:</strong> <span data-field="accuracy"></span></div>
+          <div class="hint"><strong>Coordinates:</strong> <span data-field="coordinates"></span></div>
         </div>
       </div>
       <script id="location-history-fixes" type="application/json">{{ location_history.fixes_json | safe }}</script>

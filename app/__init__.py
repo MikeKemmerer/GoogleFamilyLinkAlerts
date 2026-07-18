@@ -6,4 +6,4 @@ commit as the matching `CHANGELOG.md` entry and just before tagging
 `vX.Y.Z` (see README "Updating" for the full release runbook), so the
 version shown in the UI always matches the git tag / GHCR image tag.
 """
-__version__ = "1.11.7"
+__version__ = "1.11.8"

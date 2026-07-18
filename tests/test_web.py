@@ -970,7 +970,7 @@ def test_history_page_location_section_lists_all_permitted_children(client, engi
 
     resp_child2 = client.get("/history", params={"location_child_id": "child2"})
     assert resp_child2.status_code == 200
-    assert "No recorded location fixes yet" in resp_child2.text
+    assert "No recorded locations yet" in resp_child2.text
 
 
 def test_history_location_section_renders_map_slider_and_fix_count(client, engine):
